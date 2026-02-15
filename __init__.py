@@ -132,18 +132,6 @@ class CAMRIG_PT_panel(bpy.types.Panel):
 
 classes = (CAMRIG_OT_create, CAMRIG_PT_panel)
 
-def register():
-    for c in classes:
-        bpy.utils.register_class(c)
-
-def unregister():
-    for c in reversed(classes):
-        bpy.utils.unregister_class(c)
-
-if __name__ == "__main__":
-    register()
-
-
 # --- Numpad 0 Snap to Selected Camera ---
 
 class CAMRIG_OT_view_selected_camera(bpy.types.Operator):
