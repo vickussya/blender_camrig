@@ -1,10 +1,10 @@
 bl_info = {
-    "name": "Cam Rig Generator (Close/Med/Wide + LookAt)",
+    "name": "Cam Rig Generator (Shot Cameras + LookAt)",
     "author": "vickussya",
     "version": (1, 0, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar (N) > Cam Rig",
-    "description": "Creates 3 cameras (close/med/wide) that frame selection and track a LookAt empty.",
+    "description": "Creates 6 shot cameras around the selection and tracks a LookAt empty.",
     "category": "Camera",
 }
 

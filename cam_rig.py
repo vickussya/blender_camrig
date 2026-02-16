@@ -2,11 +2,20 @@ import bpy
 from mathutils import Vector
 
 TOOL_PROP = "cam_rig_tool"
+SHOT_PROP = "cam_rig_shot"
+TARGET_PROP = "cam_rig_target"
 COLLECTION_NAME = "CAM_RIG"
 EMPTY_NAME = "EMPTY_LOOKAT"
-CAM_CLOSE = "CAM_CLOSE"
-CAM_MED = "CAM_MED"
-CAM_WIDE = "CAM_WIDE"
+
+SHOT_DEFS = (
+    {"id": "ECU", "name": "CAM_ECU", "target_factor": 0.92, "lens": 85.0},
+    {"id": "CU", "name": "CAM_CU_HEAD", "target_factor": 0.92, "lens": 70.0},
+    {"id": "MED_WAIST", "name": "CAM_MED_WAIST", "target_factor": 0.55, "lens": 50.0},
+    {"id": "MED_FULL", "name": "CAM_MED_FULL", "target_factor": 0.70, "lens": 40.0},
+    {"id": "FULL", "name": "CAM_FULL_BODY", "target_factor": "CENTER", "lens": 35.0},
+    {"id": "WIDE", "name": "CAM_WIDE_EST", "target_factor": "CENTER", "lens": 24.0},
+)
+
 
 def ensure_collection(scene, name=COLLECTION_NAME):
     col = bpy.data.collections.get(name)
@@ -15,9 +24,23 @@ def ensure_collection(scene, name=COLLECTION_NAME):
         scene.collection.children.link(col)
     return col
 
+
+def _find_tagged_object(obj_type, name=None, shot_id=None):
+    for ob in bpy.data.objects:
+        if not ob.get(TOOL_PROP):
+            continue
+        if ob.type != obj_type:
+            continue
+        if name and ob.name == name:
+            return ob
+        if shot_id and ob.get(SHOT_PROP) == shot_id:
+            return ob
+    return None
+
+
 def get_or_create_empty(scene, rig_col):
-    empty = bpy.data.objects.get(EMPTY_NAME)
-    if empty is None or empty.type != "EMPTY":
+    empty = _find_tagged_object("EMPTY", name=EMPTY_NAME)
+    if empty is None:
         empty = bpy.data.objects.new(EMPTY_NAME, None)
         empty.empty_display_type = "ARROWS"
         empty[TOOL_PROP] = True
@@ -26,28 +49,33 @@ def get_or_create_empty(scene, rig_col):
         rig_col.objects.link(empty)
     return empty
 
-def get_or_create_camera(scene, rig_col, name):
-    cam_obj = bpy.data.objects.get(name)
-    if cam_obj is None or cam_obj.type != "CAMERA":
+
+def get_or_create_camera(scene, rig_col, name, shot_id):
+    cam_obj = _find_tagged_object("CAMERA", shot_id=shot_id)
+    if cam_obj is None:
         cam_data = bpy.data.cameras.new(name=name)
         cam_obj = bpy.data.objects.new(name=name, object_data=cam_data)
         cam_obj[TOOL_PROP] = True
+        cam_obj[SHOT_PROP] = shot_id
         scene.collection.objects.link(cam_obj)
     if cam_obj.name not in rig_col.objects:
         rig_col.objects.link(cam_obj)
     return cam_obj
+
 
 def selection_world_bounds(context):
     objs = context.selected_objects
     if not objs:
         return None
 
+    depsgraph = context.evaluated_depsgraph_get()
     corners_world = []
     for ob in objs:
-        if not hasattr(ob, "bound_box") or ob.bound_box is None:
+        ob_eval = ob.evaluated_get(depsgraph)
+        if not hasattr(ob_eval, "bound_box") or ob_eval.bound_box is None:
             continue
-        mw = ob.matrix_world
-        for corner in ob.bound_box:
+        mw = ob_eval.matrix_world
+        for corner in ob_eval.bound_box:
             corners_world.append(mw @ Vector(corner))
 
     if not corners_world:
@@ -62,14 +90,38 @@ def selection_world_bounds(context):
 
     center = (min_v + max_v) * 0.5
     size = (max_v - min_v)
-    radius = 0.5 * max(size.x, size.y, size.z)
-    radius = max(radius, 0.05)
+    height = size.z
+    max_dim = max(size.x, size.y, size.z)
 
-    return {"center": center, "radius": radius}
+    return {"min": min_v, "max": max_v, "center": center, "size": size, "height": height, "max_dim": max_dim}
+
+
+def axis_vector(axis):
+    if axis == "+X":
+        return Vector((1.0, 0.0, 0.0))
+    if axis == "-X":
+        return Vector((-1.0, 0.0, 0.0))
+    if axis == "+Y":
+        return Vector((0.0, 1.0, 0.0))
+    if axis == "-Y":
+        return Vector((0.0, -1.0, 0.0))
+    if axis == "+Z":
+        return Vector((0.0, 0.0, 1.0))
+    return Vector((0.0, 0.0, -1.0))
+
+
+def ensure_track_to(cam_obj, empty):
+    for con in [c for c in cam_obj.constraints if c.type == "TRACK_TO"]:
+        cam_obj.constraints.remove(con)
+    con = cam_obj.constraints.new(type="TRACK_TO")
+    con.target = empty
+    con.track_axis = "TRACK_NEGATIVE_Z"
+    con.up_axis = "UP_Y"
+
 
 class CAMRIG_OT_create(bpy.types.Operator):
     bl_idname = "camrig.create"
-    bl_label = "Create Cam Rig"
+    bl_label = "Create/Update Shot Cameras"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -81,32 +133,63 @@ class CAMRIG_OT_create(bpy.types.Operator):
         scene = context.scene
         rig_col = ensure_collection(scene)
         empty = get_or_create_empty(scene, rig_col)
-        cam_close = get_or_create_camera(scene, rig_col, CAM_CLOSE)
-        cam_med = get_or_create_camera(scene, rig_col, CAM_MED)
-        cam_wide = get_or_create_camera(scene, rig_col, CAM_WIDE)
 
+        min_v = bounds["min"]
         center = bounds["center"]
-        radius = bounds["radius"]
+        height = bounds["height"]
+        max_dim = bounds["max_dim"]
+
+        base_distance = max(max_dim * 2.0, 1.0)
+        spacing = 0.5 * max_dim
+
+        axis = axis_vector(scene.camrig_axis)
+        height_offset = scene.camrig_height_offset
+
+        for index, shot in enumerate(SHOT_DEFS):
+            cam_obj = get_or_create_camera(scene, rig_col, shot["name"], shot["id"])
+
+            if shot["target_factor"] == "CENTER":
+                target = Vector((center.x, center.y, center.z))
+            else:
+                target_z = min_v.z + height * shot["target_factor"]
+                target = Vector((center.x, center.y, target_z))
+
+            target.z += height_offset
+
+            distance = base_distance + spacing * index
+            cam_obj.location = target + axis * distance
+            cam_obj.data.lens = shot["lens"]
+            cam_obj[TARGET_PROP] = (target.x, target.y, target.z)
+            ensure_track_to(cam_obj, empty)
 
         empty.location = center
-
-        forward = Vector((0.0, 1.0, 0.0))
-
-        def position_camera(cam_obj, distance):
-            cam_obj.location = center - forward * distance
-            cam_obj.constraints.clear()
-            con = cam_obj.constraints.new(type="TRACK_TO")
-            con.target = empty
-            con.track_axis = "TRACK_NEGATIVE_Z"
-            con.up_axis = "UP_Y"
-
-        position_camera(cam_close, radius * 1.5)
-        position_camera(cam_med, radius * 2.5)
-        position_camera(cam_wide, radius * 4.0)
-
-        scene.camera = cam_med
+        scene.camera = _find_tagged_object("CAMERA", shot_id="MED_FULL") or scene.camera
 
         return {"FINISHED"}
+
+
+class CAMRIG_OT_set_active(bpy.types.Operator):
+    bl_idname = "camrig.set_active"
+    bl_label = "Set Active Shot"
+
+    shot_id: bpy.props.StringProperty()
+
+    def execute(self, context):
+        cam_obj = _find_tagged_object("CAMERA", shot_id=self.shot_id)
+        if cam_obj is None:
+            self.report({"ERROR"}, "Shot camera not found. Create the rig first.")
+            return {"CANCELLED"}
+
+        scene = context.scene
+        scene.camera = cam_obj
+
+        empty = _find_tagged_object("EMPTY", name=EMPTY_NAME)
+        if empty and cam_obj.get(TARGET_PROP):
+            target = cam_obj.get(TARGET_PROP)
+            empty.location = Vector((target[0], target[1], target[2]))
+
+        return {"FINISHED"}
+
 
 class CAMRIG_PT_panel(bpy.types.Panel):
     bl_label = "Cam Rig Generator"
@@ -116,9 +199,26 @@ class CAMRIG_PT_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("camrig.create", icon="CAMERA_DATA")
+        scene = context.scene
 
-classes = (CAMRIG_OT_create, CAMRIG_PT_panel)
+        box = layout.box()
+        box.label(text="Shot Cameras")
+        box.prop(scene, "camrig_axis", text="Axis")
+        box.prop(scene, "camrig_height_offset", text="Height Offset")
+        box.operator("camrig.create", text="Create/Update Shot Cameras", icon="CAMERA_DATA")
+
+        box = layout.box()
+        box.label(text="Set Active")
+        row = box.row(align=True)
+        row.operator("camrig.set_active", text="ECU").shot_id = "ECU"
+        row.operator("camrig.set_active", text="CU").shot_id = "CU"
+        row = box.row(align=True)
+        row.operator("camrig.set_active", text="MED_WAIST").shot_id = "MED_WAIST"
+        row.operator("camrig.set_active", text="MED_FULL").shot_id = "MED_FULL"
+        row = box.row(align=True)
+        row.operator("camrig.set_active", text="FULL").shot_id = "FULL"
+        row.operator("camrig.set_active", text="WIDE").shot_id = "WIDE"
+
 
 class CAMRIG_OT_view_selected_camera(bpy.types.Operator):
     bl_idname = "camrig.view_selected_camera"
@@ -131,7 +231,17 @@ class CAMRIG_OT_view_selected_camera(bpy.types.Operator):
         bpy.ops.view3d.view_camera()
         return {"FINISHED"}
 
+
+classes = (
+    CAMRIG_OT_create,
+    CAMRIG_OT_set_active,
+    CAMRIG_PT_panel,
+    CAMRIG_OT_view_selected_camera,
+)
+
+
 addon_keymaps = []
+
 
 def register_keymap():
     wm = bpy.context.window_manager
@@ -141,19 +251,42 @@ def register_keymap():
         kmi = km.keymap_items.new("camrig.view_selected_camera", type="NUMPAD_0", value="PRESS")
         addon_keymaps.append((km, kmi))
 
+
 def unregister_keymap():
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
 
+
 def register():
+    bpy.types.Scene.camrig_axis = bpy.props.EnumProperty(
+        name="Axis",
+        items=[
+            ("+X", "+X", "Place cameras along +X"),
+            ("-X", "-X", "Place cameras along -X"),
+            ("+Y", "+Y", "Place cameras along +Y"),
+            ("-Y", "-Y", "Place cameras along -Y"),
+            ("+Z", "+Z", "Place cameras along +Z"),
+            ("-Z", "-Z", "Place cameras along -Z"),
+        ],
+        default="-Y",
+    )
+    bpy.types.Scene.camrig_height_offset = bpy.props.FloatProperty(
+        name="Height Offset",
+        description="Additional height added to shot target points",
+        default=0.0,
+        step=1.0,
+    )
+
     for c in classes:
         bpy.utils.register_class(c)
-    bpy.utils.register_class(CAMRIG_OT_view_selected_camera)
     register_keymap()
+
 
 def unregister():
     unregister_keymap()
-    bpy.utils.unregister_class(CAMRIG_OT_view_selected_camera)
     for c in reversed(classes):
         bpy.utils.unregister_class(c)
+
+    del bpy.types.Scene.camrig_height_offset
+    del bpy.types.Scene.camrig_axis
