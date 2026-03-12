@@ -439,7 +439,7 @@ def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled):
     print("control empty linked:", empty.name in rig_col.objects)
     print("camera parent:", camera_obj.parent.name if camera_obj.parent else None)
     print("camera world:", camera_obj.matrix_world.translation)
-    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith(\"CTRL_CAM\")])
+    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
     return empty
 
 
@@ -485,7 +485,7 @@ def create_shot_camera(context, shot_id, index=0):
     apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
     print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
     print("camera lens:", cam_obj.data.lens)
-    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith(\"CTRL_CAM\")])
+    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
 
     lookat_obj.location = target
 
