@@ -568,7 +568,7 @@ def create_shot_set(context):
         apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
         print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
         print("camera lens:", cam_obj.data.lens)
-        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith(\"CTRL_CAM\")])
+        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
 
     if base_target is not None:
         lookat_obj.location = base_target
