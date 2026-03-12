@@ -41,6 +41,11 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
         description="Parent cameras to a circle empty for easier manual adjustments",
         default=False,
     )
+    use_camera_circle_parent: bpy.props.BoolProperty(
+        name="Use Camera Circle Parent",
+        description="Add a visible circle empty as a camera parent for manual control",
+        default=False,
+    )
     look_at_target: bpy.props.PointerProperty(name="Look-at Target", type=bpy.types.Object)
     height_offset: bpy.props.FloatProperty(
         name="Height Offset",

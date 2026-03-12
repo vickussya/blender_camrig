@@ -286,8 +286,8 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "MED_FULL": min_z + height * 0.62,
         "FULL": min_z + height * 0.50,
         "WIDE": min_z + height * 0.50,
-        "OTS_A": min_z + height * 0.70,
-        "OTS_B": min_z + height * 0.70,
+        "OTS_A": min_z + height * 0.72,
+        "OTS_B": min_z + height * 0.72,
         "SINGLE_A": min_z + height * 0.76,
         "SINGLE_B": min_z + height * 0.76,
         "TWO_SHOT": min_z + height * 0.58,
@@ -310,20 +310,20 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
     depth = bounds["size"].y
     base = max(width, depth, height, 0.1)
     multipliers = {
-        "ECU": 0.8,
-        "CU": 1.1,
-        "MED_WAIST": 1.8,
-        "MED_FULL": 2.4,
-        "FULL": 3.2,
-        "WIDE": 4.8,
-        "OTS_A": 2.0,
-        "OTS_B": 2.0,
-        "SINGLE_A": 1.8,
-        "SINGLE_B": 1.8,
-        "TWO_SHOT": 2.8,
-        "TURNTABLE": 3.2,
+        "ECU": 1.0,
+        "CU": 1.5,
+        "MED_WAIST": 2.5,
+        "MED_FULL": 3.5,
+        "FULL": 5.0,
+        "WIDE": 7.5,
+        "OTS_A": 2.5,
+        "OTS_B": 2.5,
+        "SINGLE_A": 2.5,
+        "SINGLE_B": 2.5,
+        "TWO_SHOT": 4.0,
+        "TURNTABLE": 4.0,
     }
-    distance = max(base * multipliers.get(shot_type, 2.0), base * 0.6)
+    distance = max(base * multipliers.get(shot_type, 2.5), base * 1.0)
     camera_location = target + axis_dir * distance
 
     if axis in {"+Z", "-Z"}:
@@ -353,6 +353,7 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
     print("Axis vector:", axis_dir)
     print("Distance:", distance)
     print("Camera location:", camera_location)
+    print("Lens:", lens_map.get(shot_type))
 
     return camera_location, target, lens_map.get(shot_type)
 
@@ -402,11 +403,11 @@ def get_control_empty_name(camera_name):
     return f"CTRL_{camera_name}"
 
 
-def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled):
+def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled, name_override=None):
     if not enabled:
         return None
 
-    name = get_control_empty_name(camera_obj.name)
+    name = name_override or get_control_empty_name(camera_obj.name)
     empty = _find_tagged_object("EMPTY", name=name)
     if empty is not None and empty.get("cam_rig_camera") != camera_obj.name:
         empty.name = f"{name}_OLD"
@@ -434,7 +435,7 @@ def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled):
     camera_obj.matrix_parent_inverse = empty.matrix_world.inverted()
     camera_obj.matrix_world = cam_world
 
-    print("use_control_empty:", enabled)
+    print("use_circle_parent:", enabled)
     print("control empty:", empty.name)
     print("control empty linked:", empty.name in rig_col.objects)
     print("camera parent:", camera_obj.parent.name if camera_obj.parent else None)
@@ -444,7 +445,7 @@ def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled):
 
 
 def apply_camera_parenting(scene, rig_col, parent_obj, camera_obj, settings):
-    if settings.use_camera_control_empty:
+    if settings.use_camera_circle_parent:
         ensure_camera_control_empty(camera_obj, parent_obj, rig_col, True)
         return
     if parent_obj:
@@ -478,7 +479,7 @@ def create_shot_camera(context, shot_id, index=0):
 
     cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
     cam_obj.data.lens = lens if lens else shot_def["lens"]
-    print("use_control_empty:", settings.use_camera_control_empty)
+    print("use_circle_parent:", settings.use_camera_circle_parent)
     axis_dir = axis_vector(settings.axis)
     distance = (camera_location - target).length
     place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
@@ -561,7 +562,7 @@ def create_shot_set(context):
             continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
         cam_obj.data.lens = lens if lens else shot["lens"]
-        print("use_control_empty:", settings.use_camera_control_empty)
+    print("use_circle_parent:", settings.use_camera_circle_parent)
         axis_dir = axis_vector(settings.axis)
         distance = (camera_location - target).length
         place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
