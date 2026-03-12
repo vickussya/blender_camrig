@@ -267,45 +267,94 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         objects = [subject] if subject else []
 
     if not objects:
-        return None, None
+        return None, None, None
 
     depsgraph = context.evaluated_depsgraph_get()
     bounds = selection_world_bounds(objects, depsgraph)
     if bounds is None:
-        return None, None
+        return None, None, None
 
     settings = get_settings(context)
     anchors = compute_subject_anchors(bounds)
-    target = anchors["eye"].copy() if eye_level else anchors["neutral"].copy()
-    target.z = max(target.z, anchors["neutral"].z)
+    min_z = bounds["min"].z
+    height = bounds["height"]
 
+    shot_heights = {
+        "ECU": min_z + height * 0.88,
+        "CU": min_z + height * 0.82,
+        "MED_WAIST": min_z + height * 0.72,
+        "MED_FULL": min_z + height * 0.62,
+        "FULL": min_z + height * 0.50,
+        "WIDE": min_z + height * 0.50,
+        "OTS_A": min_z + height * 0.70,
+        "OTS_B": min_z + height * 0.70,
+        "SINGLE_A": min_z + height * 0.76,
+        "SINGLE_B": min_z + height * 0.76,
+        "TWO_SHOT": min_z + height * 0.58,
+        "TURNTABLE": min_z + height * 0.60,
+    }
+
+    neutral_height = min_z + height * 0.60
+    eye_height = min_z + height * 0.85
+    target_height = shot_heights.get(shot_type, neutral_height)
+    if eye_level:
+        target_height = max(target_height, eye_height)
+
+    target = Vector((anchors["center"].x, anchors["center"].y, target_height))
     axis_dir = axis_vector(axis)
     if settings.rule_of_thirds:
         target = apply_thirds_offset(target, bounds, settings, axis_dir)
-
     target.z += settings.height_offset
-    base = max(bounds["size"].x, bounds["size"].y, bounds["size"].z, 0.1)
+
+    width = bounds["size"].x
+    depth = bounds["size"].y
+    base = max(width, depth, height, 0.1)
     multipliers = {
-        "ECU": 0.9,
-        "CU": 1.2,
-        "MED_WAIST": 2.0,
-        "MED_FULL": 2.8,
-        "FULL": 3.6,
-        "WIDE": 5.0,
-        "OTS_A": 2.2,
-        "OTS_B": 2.2,
-        "SINGLE_A": 2.0,
-        "SINGLE_B": 2.0,
-        "TWO_SHOT": 3.2,
-        "TURNTABLE": 3.6,
+        "ECU": 0.8,
+        "CU": 1.1,
+        "MED_WAIST": 1.8,
+        "MED_FULL": 2.4,
+        "FULL": 3.2,
+        "WIDE": 4.8,
+        "OTS_A": 2.0,
+        "OTS_B": 2.0,
+        "SINGLE_A": 1.8,
+        "SINGLE_B": 1.8,
+        "TWO_SHOT": 2.8,
+        "TURNTABLE": 3.2,
     }
-    distance = max(base * multipliers.get(shot_type, 2.0), base * 0.5)
+    distance = max(base * multipliers.get(shot_type, 2.0), base * 0.6)
     camera_location = target + axis_dir * distance
 
-    print("Camera location:", camera_location)
-    print("Target:", target)
+    if axis in {"+Z", "-Z"}:
+        camera_location.x = anchors["center"].x
+        camera_location.y = anchors["center"].y
 
-    return camera_location, target
+    lens_map = {
+        "ECU": 85.0,
+        "CU": 70.0,
+        "MED_WAIST": 50.0,
+        "MED_FULL": 40.0,
+        "FULL": 35.0,
+        "WIDE": 24.0,
+        "OTS_A": 50.0,
+        "OTS_B": 50.0,
+        "SINGLE_A": 50.0,
+        "SINGLE_B": 50.0,
+        "TWO_SHOT": 35.0,
+        "TURNTABLE": 35.0,
+    }
+
+    print("Shot type:", shot_type)
+    print("BBox min:", bounds["min"], "max:", bounds["max"])
+    print("BBox center:", bounds["center"])
+    print("Target height:", target_height)
+    print("Target location:", target)
+    print("Axis vector:", axis_dir)
+    print("Distance:", distance)
+    print("Camera location:", camera_location)
+
+    return camera_location, target, lens_map.get(shot_type)
 
 
 def apply_thirds_offset(target, bounds, settings, axis_dir):
@@ -353,7 +402,11 @@ def get_control_empty_name(camera_name):
     return f"CTRL_{camera_name}"
 
 
-def get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, name):
+def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled):
+    if not enabled:
+        return None
+
+    name = get_control_empty_name(camera_obj.name)
     empty = _find_tagged_object("EMPTY", name=name)
     if empty is not None and empty.get("cam_rig_camera") != camera_obj.name:
         empty.name = f"{name}_OLD"
@@ -363,30 +416,36 @@ def get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, n
         empty.empty_display_type = "CIRCLE"
         empty.empty_display_size = 1.5
         empty.hide_viewport = False
+        empty.hide_render = True
         empty.hide_set(False)
         _tag_object(empty)
-        scene.collection.objects.link(empty)
+        rig_col.objects.link(empty)
     if empty.name not in rig_col.objects:
         rig_col.objects.link(empty)
-    empty["cam_rig_camera"] = camera_obj.name
-    empty.matrix_world = camera_obj.matrix_world.copy()
-    if parent_obj:
-        parent_keep_world(empty, parent_obj)
+
     cam_world = camera_obj.matrix_world.copy()
+    empty.matrix_world = cam_world
+    empty["cam_rig_camera"] = camera_obj.name
+
+    if rig_root:
+        parent_keep_world(empty, rig_root)
+
     camera_obj.parent = empty
     camera_obj.matrix_parent_inverse = empty.matrix_world.inverted()
     camera_obj.matrix_world = cam_world
-    print("Control empty:", empty.name)
-    print("Control empty world:", empty.matrix_world.translation)
-    print("Camera parent:", camera_obj.parent.name if camera_obj.parent else None)
-    print("Camera world:", camera_obj.matrix_world.translation)
+
+    print("use_control_empty:", enabled)
+    print("control empty:", empty.name)
+    print("control empty linked:", empty.name in rig_col.objects)
+    print("camera parent:", camera_obj.parent.name if camera_obj.parent else None)
+    print("camera world:", camera_obj.matrix_world.translation)
+    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith(\"CTRL_CAM\")])
     return empty
 
 
 def apply_camera_parenting(scene, rig_col, parent_obj, camera_obj, settings):
     if settings.use_camera_control_empty:
-        control_name = get_control_empty_name(camera_obj.name)
-        get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, control_name)
+        ensure_camera_control_empty(camera_obj, parent_obj, rig_col, True)
         return
     if parent_obj:
         parent_keep_world(camera_obj, parent_obj)
@@ -407,7 +466,7 @@ def create_shot_camera(context, shot_id, index=0):
     root = ensure_root(scene, rig_col)
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
 
-    camera_location, target = compute_camera_transform(
+    camera_location, target, lens = compute_camera_transform(
         context,
         subjects,
         shot_id,
@@ -418,11 +477,15 @@ def create_shot_camera(context, shot_id, index=0):
         return None, "Unable to compute camera placement."
 
     cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
-    cam_obj.data.lens = shot_def["lens"]
+    cam_obj.data.lens = lens if lens else shot_def["lens"]
+    print("use_control_empty:", settings.use_camera_control_empty)
     axis_dir = axis_vector(settings.axis)
     distance = (camera_location - target).length
     place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
     apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
+    print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
+    print("camera lens:", cam_obj.data.lens)
+    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith(\"CTRL_CAM\")])
 
     lookat_obj.location = target
 
@@ -478,7 +541,7 @@ def create_shot_set(context):
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
-    _, base_target = compute_camera_transform(
+    _, base_target, _ = compute_camera_transform(
         context,
         subjects,
         "MED_FULL",
@@ -487,7 +550,7 @@ def create_shot_set(context):
     )
 
     for index, shot in enumerate(SHOT_DEFS):
-        camera_location, target = compute_camera_transform(
+        camera_location, target, lens = compute_camera_transform(
             context,
             subjects,
             shot["id"],
@@ -497,11 +560,15 @@ def create_shot_set(context):
         if camera_location is None or target is None:
             continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
-        cam_obj.data.lens = shot["lens"]
+        cam_obj.data.lens = lens if lens else shot["lens"]
+        print("use_control_empty:", settings.use_camera_control_empty)
         axis_dir = axis_vector(settings.axis)
         distance = (camera_location - target).length
         place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
         apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
+        print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
+        print("camera lens:", cam_obj.data.lens)
+        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith(\"CTRL_CAM\")])
 
     if base_target is not None:
         lookat_obj.location = base_target
@@ -558,7 +625,7 @@ def create_turntable(context):
     if cam_obj.name not in rig_col.objects:
         rig_col.objects.link(cam_obj)
 
-    camera_location, target = compute_camera_transform(
+    camera_location, target, lens = compute_camera_transform(
         context,
         subjects,
         "TURNTABLE",
@@ -568,6 +635,8 @@ def create_turntable(context):
     if camera_location is None or target is None:
         return "Unable to compute camera placement."
     cam_obj.location = camera_location
+    if lens:
+        cam_obj.data.lens = lens
     apply_camera_parenting(scene, rig_col, pivot, cam_obj, settings)
 
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
@@ -592,7 +661,7 @@ def apply_composition_to_active(context):
     if not subjects:
         return "Select at least one object."
 
-    camera_location, target = compute_camera_transform(
+    camera_location, target, lens = compute_camera_transform(
         context,
         subjects,
         cam_obj.get(SHOT_PROP, "MED_FULL"),
@@ -605,6 +674,8 @@ def apply_composition_to_active(context):
     lookat_obj, auto_target = ensure_lookat(scene, ensure_collection(scene), ensure_root(scene, ensure_collection(scene)), settings)
     lookat_obj.location = target
     cam_obj.location = camera_location
+    if lens:
+        cam_obj.data.lens = lens
     cam_obj[TARGET_PROP] = (target.x, target.y, target.z)
     return None
 
