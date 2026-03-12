@@ -355,20 +355,31 @@ def get_control_empty_name(camera_name):
 
 def get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, name):
     empty = _find_tagged_object("EMPTY", name=name)
+    if empty is not None and empty.get("cam_rig_camera") != camera_obj.name:
+        empty.name = f"{name}_OLD"
+        empty = None
     if empty is None:
         empty = bpy.data.objects.new(name, None)
         empty.empty_display_type = "CIRCLE"
-        empty.empty_display_size = 0.5
+        empty.empty_display_size = 1.5
+        empty.hide_viewport = False
+        empty.hide_set(False)
         _tag_object(empty)
         scene.collection.objects.link(empty)
     if empty.name not in rig_col.objects:
         rig_col.objects.link(empty)
+    empty["cam_rig_camera"] = camera_obj.name
     empty.matrix_world = camera_obj.matrix_world.copy()
     if parent_obj:
         parent_keep_world(empty, parent_obj)
+    cam_world = camera_obj.matrix_world.copy()
     camera_obj.parent = empty
     camera_obj.matrix_parent_inverse = empty.matrix_world.inverted()
-    camera_obj.matrix_world = empty.matrix_world.copy()
+    camera_obj.matrix_world = cam_world
+    print("Control empty:", empty.name)
+    print("Control empty world:", empty.matrix_world.translation)
+    print("Camera parent:", camera_obj.parent.name if camera_obj.parent else None)
+    print("Camera world:", camera_obj.matrix_world.translation)
     return empty
 
 

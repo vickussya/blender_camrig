@@ -37,7 +37,7 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
     eye_level: bpy.props.BoolProperty(name="Eye Level", default=False)
     tracking_enabled: bpy.props.BoolProperty(name="Tracking", default=True)
     use_camera_control_empty: bpy.props.BoolProperty(
-        name="Camera Control Circle",
+        name="Use Control Empty",
         description="Parent cameras to a circle empty for easier manual adjustments",
         default=False,
     )
