@@ -562,7 +562,7 @@ def create_shot_set(context):
             continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
         cam_obj.data.lens = lens if lens else shot["lens"]
-    print("use_circle_parent:", settings.use_camera_circle_parent)
+        print("use_circle_parent:", settings.use_camera_circle_parent)
         axis_dir = axis_vector(settings.axis)
         distance = (camera_location - target).length
         place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
