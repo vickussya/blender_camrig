@@ -59,3 +59,6 @@ Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. 
 - **Cameras spawn inside object** -> Apply scale (`Ctrl+A` -> Scale) or increase distance by moving the subject scale.
 - **Numpad 0 doesn't snap** -> Check keymap conflicts or enable **Emulate Numpad**.
 - **Nothing happens** -> Make sure at least one object is selected and you are in Object Mode.
+
+## License
+This add-on is licensed under the GPL-3.0. See `LICENSE` for details.
