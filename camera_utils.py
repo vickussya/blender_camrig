@@ -238,8 +238,8 @@ def compute_subject_anchors(bounds):
     center = bounds["center"]
     height = bounds["height"]
 
-    eye_z = min_v.z + height * 0.85
     neutral_z = min_v.z + height * 0.55
+    eye_z = min_v.z + height * 0.85
     return {
         "center": center,
         "bottom": Vector((center.x, center.y, min_v.z)),
@@ -260,40 +260,52 @@ def compute_eye_height(bounds):
     return bounds["min"].z + bounds["height"] * 0.85
 
 
-def compute_target(bounds, shot_def, settings):
-    anchors = compute_subject_anchors(bounds)
-    if settings.eye_level:
-        target = anchors["eye"].copy()
+def compute_camera_transform(context, subject, shot_type, axis, eye_level):
+    if isinstance(subject, (list, tuple, set)):
+        objects = list(subject)
     else:
-        if shot_def["target_factor"] == "CENTER":
-            target = anchors["center"].copy()
-        else:
-            target = anchors["neutral"].copy()
-            target.z = bounds["min"].z + bounds["height"] * shot_def["target_factor"]
+        objects = [subject] if subject else []
 
+    if not objects:
+        return None, None
+
+    depsgraph = context.evaluated_depsgraph_get()
+    bounds = selection_world_bounds(objects, depsgraph)
+    if bounds is None:
+        return None, None
+
+    settings = get_settings(context)
+    anchors = compute_subject_anchors(bounds)
+    target = anchors["eye"].copy() if eye_level else anchors["neutral"].copy()
     target.z = max(target.z, anchors["neutral"].z)
+
+    axis_dir = axis_vector(axis)
+    if settings.rule_of_thirds:
+        target = apply_thirds_offset(target, bounds, settings, axis_dir)
+
     target.z += settings.height_offset
-    return target
-
-
-def compute_shot_distance(shot_id, bounds):
-    size = bounds["size"]
-    base_size = max(size.x, size.y, size.z * 0.75, 0.1)
+    base = max(bounds["size"].x, bounds["size"].y, bounds["size"].z, 0.1)
     multipliers = {
-        "ECU": 1.2,
-        "CU": 1.6,
-        "MED_WAIST": 2.2,
+        "ECU": 0.9,
+        "CU": 1.2,
+        "MED_WAIST": 2.0,
         "MED_FULL": 2.8,
-        "FULL": 3.4,
+        "FULL": 3.6,
         "WIDE": 5.0,
-        "OTS_A": 2.4,
-        "OTS_B": 2.4,
-        "SINGLE_A": 2.2,
-        "SINGLE_B": 2.2,
+        "OTS_A": 2.2,
+        "OTS_B": 2.2,
+        "SINGLE_A": 2.0,
+        "SINGLE_B": 2.0,
         "TWO_SHOT": 3.2,
-        "TURNTABLE": 3.8,
+        "TURNTABLE": 3.6,
     }
-    return max(base_size * multipliers.get(shot_id, 2.5), 0.5)
+    distance = max(base * multipliers.get(shot_type, 2.0), base * 0.5)
+    camera_location = target + axis_dir * distance
+
+    print("Camera location:", camera_location)
+    print("Target:", target)
+
+    return camera_location, target
 
 
 def apply_thirds_offset(target, bounds, settings, axis_dir):
@@ -352,8 +364,11 @@ def get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, n
     if empty.name not in rig_col.objects:
         rig_col.objects.link(empty)
     empty.matrix_world = camera_obj.matrix_world.copy()
-    parent_keep_world(empty, parent_obj)
-    parent_keep_world(camera_obj, empty)
+    if parent_obj:
+        parent_keep_world(empty, parent_obj)
+    camera_obj.parent = empty
+    camera_obj.matrix_parent_inverse = empty.matrix_world.inverted()
+    camera_obj.matrix_world = empty.matrix_world.copy()
     return empty
 
 
@@ -373,11 +388,6 @@ def create_shot_camera(context, shot_id, index=0):
     if not subjects:
         return None, "Select at least one object."
 
-    depsgraph = context.evaluated_depsgraph_get()
-    bounds = selection_world_bounds(subjects, depsgraph)
-    if bounds is None:
-        return None, "Unable to compute bounds for selection."
-
     shot_def = get_shot_def(shot_id)
     if shot_def is None:
         return None, "Unknown shot type."
@@ -386,19 +396,24 @@ def create_shot_camera(context, shot_id, index=0):
     root = ensure_root(scene, rig_col)
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
 
-    axis_dir = axis_vector(settings.axis)
-    target = compute_target(bounds, shot_def, settings)
-    target = apply_thirds_offset(target, bounds, settings, axis_dir)
-
-    distance = compute_shot_distance(shot_id, bounds)
+    camera_location, target = compute_camera_transform(
+        context,
+        subjects,
+        shot_id,
+        settings.axis,
+        settings.eye_level,
+    )
+    if camera_location is None or target is None:
+        return None, "Unable to compute camera placement."
 
     cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
     cam_obj.data.lens = shot_def["lens"]
+    axis_dir = axis_vector(settings.axis)
+    distance = (camera_location - target).length
     place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
     apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
 
-    if auto_target:
-        lookat_obj.location = target
+    lookat_obj.location = target
 
     return cam_obj, None
 
@@ -436,8 +451,7 @@ def ensure_rig_for_selection(context):
     subject = get_primary_subject(context)
     apply_tracking(root, subject, settings.tracking_enabled)
 
-    if auto_target:
-        lookat_obj.location = bounds["center"]
+    lookat_obj.location = bounds["center"]
 
     return bounds, None
 
@@ -448,24 +462,38 @@ def create_shot_set(context):
         return err
 
     settings = get_settings(context)
-    axis_dir = axis_vector(settings.axis)
-
+    subjects = get_selected_subjects(context)
     scene = context.scene
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
+    _, base_target = compute_camera_transform(
+        context,
+        subjects,
+        "MED_FULL",
+        settings.axis,
+        settings.eye_level,
+    )
 
     for index, shot in enumerate(SHOT_DEFS):
-        target = compute_target(bounds, shot, settings)
-        target = apply_thirds_offset(target, bounds, settings, axis_dir)
-        distance = compute_shot_distance(shot["id"], bounds)
+        camera_location, target = compute_camera_transform(
+            context,
+            subjects,
+            shot["id"],
+            settings.axis,
+            settings.eye_level,
+        )
+        if camera_location is None or target is None:
+            continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
         cam_obj.data.lens = shot["lens"]
+        axis_dir = axis_vector(settings.axis)
+        distance = (camera_location - target).length
         place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
         apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
 
-    if auto_target:
-        lookat_obj.location = bounds["center"]
+    if base_target is not None:
+        lookat_obj.location = base_target
 
     scene.camera = _find_tagged_object("CAMERA", shot_id="MED_FULL") or scene.camera
     return None
@@ -519,14 +547,20 @@ def create_turntable(context):
     if cam_obj.name not in rig_col.objects:
         rig_col.objects.link(cam_obj)
 
-    axis_dir = axis_vector(settings.axis)
-    distance = max(bounds["max_dim"] * 2.5, 2.0)
-    cam_obj.location = bounds["center"] + axis_dir * distance
+    camera_location, target = compute_camera_transform(
+        context,
+        subjects,
+        "TURNTABLE",
+        settings.axis,
+        settings.eye_level,
+    )
+    if camera_location is None or target is None:
+        return "Unable to compute camera placement."
+    cam_obj.location = camera_location
     apply_camera_parenting(scene, rig_col, pivot, cam_obj, settings)
 
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
-    if auto_target:
-        lookat_obj.location = bounds["center"]
+    lookat_obj.location = target
     ensure_track_to(cam_obj, lookat_obj)
 
     pivot.rotation_euler = Vector((0.0, 0.0, 0.0))
@@ -547,19 +581,19 @@ def apply_composition_to_active(context):
     if not subjects:
         return "Select at least one object."
 
-    depsgraph = context.evaluated_depsgraph_get()
-    bounds = selection_world_bounds(subjects, depsgraph)
-    if bounds is None:
-        return "Unable to compute bounds for selection."
-
-    axis_dir = axis_vector(settings.axis)
-    shot_def = get_shot_def(cam_obj.get(SHOT_PROP, "MED_FULL")) or SHOT_DEFS[3]
-    target = compute_target(bounds, shot_def, settings)
-    target = apply_thirds_offset(target, bounds, settings, axis_dir)
+    camera_location, target = compute_camera_transform(
+        context,
+        subjects,
+        cam_obj.get(SHOT_PROP, "MED_FULL"),
+        settings.axis,
+        settings.eye_level,
+    )
+    if camera_location is None or target is None:
+        return "Unable to compute camera placement."
 
     lookat_obj, auto_target = ensure_lookat(scene, ensure_collection(scene), ensure_root(scene, ensure_collection(scene)), settings)
-    if auto_target:
-        lookat_obj.location = target
+    lookat_obj.location = target
+    cam_obj.location = camera_location
     cam_obj[TARGET_PROP] = (target.x, target.y, target.z)
     return None
 
