@@ -2,6 +2,7 @@ from mathutils import Vector
 
 from .camera_utils import (
     apply_tracking,
+    apply_camera_parenting,
     compute_eye_height,
     create_or_get_camera,
     ensure_collection,
@@ -9,15 +10,14 @@ from .camera_utils import (
     ensure_track_to,
     get_dialogue_subjects,
     get_primary_subject,
-    parent_keep_world,
     selection_world_bounds,
 )
 
 
-def create_dialogue_camera(scene, rig_col, root, shot_id, name, position, target_obj):
+def create_dialogue_camera(scene, rig_col, root, settings, shot_id, name, position, target_obj):
     cam_obj = create_or_get_camera(scene, rig_col, name, shot_id)
     cam_obj.location = position
-    parent_keep_world(cam_obj, root)
+    apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
     ensure_track_to(cam_obj, target_obj)
     return cam_obj
 
@@ -57,21 +57,21 @@ def create_dialogue_setup(context, mode):
     if mode in {"OTS_A", "SINGLES"}:
         pos = a.matrix_world.translation + (-ab_dir * distance) + (right * shoulder)
         pos.z = eye
-        create_dialogue_camera(scene, rig_col, root, "OTS_A", "CAM_OTS_A", pos, b)
+        create_dialogue_camera(scene, rig_col, root, settings, "OTS_A", "CAM_OTS_A", pos, b)
     if mode in {"OTS_B", "SINGLES"}:
         pos = b.matrix_world.translation + (ab_dir * distance) + (-right * shoulder)
         pos.z = eye
-        create_dialogue_camera(scene, rig_col, root, "OTS_B", "CAM_OTS_B", pos, a)
+        create_dialogue_camera(scene, rig_col, root, settings, "OTS_B", "CAM_OTS_B", pos, a)
     if mode == "SINGLES":
         pos = a.matrix_world.translation + (-ab_dir * distance)
         pos.z = eye
-        create_dialogue_camera(scene, rig_col, root, "SINGLE_A", "CAM_SINGLE_A", pos, a)
+        create_dialogue_camera(scene, rig_col, root, settings, "SINGLE_A", "CAM_SINGLE_A", pos, a)
         pos = b.matrix_world.translation + (ab_dir * distance)
         pos.z = eye
-        create_dialogue_camera(scene, rig_col, root, "SINGLE_B", "CAM_SINGLE_B", pos, b)
+        create_dialogue_camera(scene, rig_col, root, settings, "SINGLE_B", "CAM_SINGLE_B", pos, b)
     if mode == "TWO_SHOT":
         pos = center + (right * distance)
         pos.z = eye
-        create_dialogue_camera(scene, rig_col, root, "TWO_SHOT", "CAM_TWO_SHOT", pos, b)
+        create_dialogue_camera(scene, rig_col, root, settings, "TWO_SHOT", "CAM_TWO_SHOT", pos, b)
 
     return None

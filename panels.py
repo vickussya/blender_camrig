@@ -27,6 +27,7 @@ class CAMRIG_PT_setup(bpy.types.Panel):
         layout.prop(settings, "axis")
         layout.prop(settings, "eye_level")
         layout.prop(settings, "tracking_enabled")
+        layout.prop(settings, "use_camera_control_empty")
         layout.prop(settings, "look_at_target")
         layout.prop(settings, "height_offset")
 

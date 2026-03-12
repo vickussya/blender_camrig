@@ -231,6 +231,24 @@ def selection_world_bounds(objects, depsgraph):
     return {"min": min_v, "max": max_v, "center": center, "size": size, "height": height, "max_dim": max_dim}
 
 
+def compute_subject_anchors(bounds):
+    # Use world-space bounding box to derive stable framing anchors.
+    min_v = bounds["min"]
+    max_v = bounds["max"]
+    center = bounds["center"]
+    height = bounds["height"]
+
+    eye_z = min_v.z + height * 0.85
+    neutral_z = min_v.z + height * 0.55
+    return {
+        "center": center,
+        "bottom": Vector((center.x, center.y, min_v.z)),
+        "top": Vector((center.x, center.y, max_v.z)),
+        "eye": Vector((center.x, center.y, eye_z)),
+        "neutral": Vector((center.x, center.y, neutral_z)),
+    }
+
+
 def get_shot_def(shot_id):
     for shot in SHOT_DEFS:
         if shot["id"] == shot_id:
@@ -239,25 +257,43 @@ def get_shot_def(shot_id):
 
 
 def compute_eye_height(bounds):
-    return bounds["min"].z + bounds["height"] * 0.9
+    return bounds["min"].z + bounds["height"] * 0.85
 
 
 def compute_target(bounds, shot_def, settings):
-    center = bounds["center"]
-    min_v = bounds["min"]
-    height = bounds["height"]
-
-    if shot_def["target_factor"] == "CENTER":
-        target = Vector((center.x, center.y, center.z))
+    anchors = compute_subject_anchors(bounds)
+    if settings.eye_level:
+        target = anchors["eye"].copy()
     else:
-        if settings.eye_level:
-            target_z = compute_eye_height(bounds)
+        if shot_def["target_factor"] == "CENTER":
+            target = anchors["center"].copy()
         else:
-            target_z = min_v.z + height * shot_def["target_factor"]
-        target = Vector((center.x, center.y, target_z))
+            target = anchors["neutral"].copy()
+            target.z = bounds["min"].z + bounds["height"] * shot_def["target_factor"]
 
+    target.z = max(target.z, anchors["neutral"].z)
     target.z += settings.height_offset
     return target
+
+
+def compute_shot_distance(shot_id, bounds):
+    size = bounds["size"]
+    base_size = max(size.x, size.y, size.z * 0.75, 0.1)
+    multipliers = {
+        "ECU": 1.2,
+        "CU": 1.6,
+        "MED_WAIST": 2.2,
+        "MED_FULL": 2.8,
+        "FULL": 3.4,
+        "WIDE": 5.0,
+        "OTS_A": 2.4,
+        "OTS_B": 2.4,
+        "SINGLE_A": 2.2,
+        "SINGLE_B": 2.2,
+        "TWO_SHOT": 3.2,
+        "TURNTABLE": 3.8,
+    }
+    return max(base_size * multipliers.get(shot_id, 2.5), 0.5)
 
 
 def apply_thirds_offset(target, bounds, settings, axis_dir):
@@ -294,11 +330,40 @@ def create_or_get_camera(scene, rig_col, name, shot_id):
 
 def place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance):
     cam_obj.location = target + axis_dir * distance
-    if root:
-        parent_keep_world(cam_obj, root)
     if lookat_obj:
         ensure_track_to(cam_obj, lookat_obj)
     cam_obj[TARGET_PROP] = (target.x, target.y, target.z)
+
+
+def get_control_empty_name(camera_name):
+    if camera_name.startswith("CAM_"):
+        return camera_name.replace("CAM_", "CTRL_CAM_", 1)
+    return f"CTRL_{camera_name}"
+
+
+def get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, name):
+    empty = _find_tagged_object("EMPTY", name=name)
+    if empty is None:
+        empty = bpy.data.objects.new(name, None)
+        empty.empty_display_type = "CIRCLE"
+        empty.empty_display_size = 0.5
+        _tag_object(empty)
+        scene.collection.objects.link(empty)
+    if empty.name not in rig_col.objects:
+        rig_col.objects.link(empty)
+    empty.matrix_world = camera_obj.matrix_world.copy()
+    parent_keep_world(empty, parent_obj)
+    parent_keep_world(camera_obj, empty)
+    return empty
+
+
+def apply_camera_parenting(scene, rig_col, parent_obj, camera_obj, settings):
+    if settings.use_camera_control_empty:
+        control_name = get_control_empty_name(camera_obj.name)
+        get_or_create_camera_control_empty(scene, rig_col, parent_obj, camera_obj, control_name)
+        return
+    if parent_obj:
+        parent_keep_world(camera_obj, parent_obj)
 
 
 def create_shot_camera(context, shot_id, index=0):
@@ -325,14 +390,12 @@ def create_shot_camera(context, shot_id, index=0):
     target = compute_target(bounds, shot_def, settings)
     target = apply_thirds_offset(target, bounds, settings, axis_dir)
 
-    max_dim = bounds["max_dim"]
-    base_distance = max(max_dim * 2.0, 1.0)
-    spacing = 0.5 * max_dim
-    distance = base_distance + spacing * index
+    distance = compute_shot_distance(shot_id, bounds)
 
     cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
     cam_obj.data.lens = shot_def["lens"]
     place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
+    apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
 
     if auto_target:
         lookat_obj.location = target
@@ -386,9 +449,6 @@ def create_shot_set(context):
 
     settings = get_settings(context)
     axis_dir = axis_vector(settings.axis)
-    max_dim = bounds["max_dim"]
-    base_distance = max(max_dim * 2.0, 1.0)
-    spacing = 0.5 * max_dim
 
     scene = context.scene
     rig_col = ensure_collection(scene)
@@ -398,10 +458,11 @@ def create_shot_set(context):
     for index, shot in enumerate(SHOT_DEFS):
         target = compute_target(bounds, shot, settings)
         target = apply_thirds_offset(target, bounds, settings, axis_dir)
-        distance = base_distance + spacing * index
+        distance = compute_shot_distance(shot["id"], bounds)
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
         cam_obj.data.lens = shot["lens"]
         place_shot_camera(cam_obj, root, lookat_obj, target, axis_dir, distance)
+        apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
 
     if auto_target:
         lookat_obj.location = bounds["center"]
@@ -461,7 +522,7 @@ def create_turntable(context):
     axis_dir = axis_vector(settings.axis)
     distance = max(bounds["max_dim"] * 2.5, 2.0)
     cam_obj.location = bounds["center"] + axis_dir * distance
-    parent_keep_world(cam_obj, pivot)
+    apply_camera_parenting(scene, rig_col, pivot, cam_obj, settings)
 
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
     if auto_target:
