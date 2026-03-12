@@ -1,10 +1,10 @@
 bl_info = {
-    "name": "Cam Rig Generator (Shot Cameras + LookAt)",
+    "name": "Cam Rig Generator (Cinematic Toolkit)",
     "author": "vickussya",
-    "version": (1, 0, 0),
+    "version": (2, 0, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar (N) > Cam Rig",
-    "description": "Creates 6 shot cameras around the selection and tracks a LookAt empty.",
+    "description": "Cinematic camera rig with tracking, dialogue, turntable, presets, and shot library tools.",
     "category": "Camera",
 }
 
