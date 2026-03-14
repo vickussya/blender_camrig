@@ -1,3 +1,5 @@
+import math
+
 import bpy
 from mathutils import Vector, Matrix
 
@@ -315,6 +317,20 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "TURNTABLE": 4.0,
     }
     distance = max(base * multipliers.get(shot_type, 2.5), base * 1.0)
+    # Ensure camera sits outside the subject bounds along the chosen axis.
+    margin = max(base * 0.1, 0.05)
+    if axis == "+X":
+        distance = max(distance, (bounds["max"].x - target.x) + margin)
+    elif axis == "-X":
+        distance = max(distance, (target.x - bounds["min"].x) + margin)
+    elif axis == "+Y":
+        distance = max(distance, (bounds["max"].y - target.y) + margin)
+    elif axis == "-Y":
+        distance = max(distance, (target.y - bounds["min"].y) + margin)
+    elif axis == "+Z":
+        distance = max(distance, (bounds["max"].z - target.z) + margin)
+    elif axis == "-Z":
+        distance = max(distance, (target.z - bounds["min"].z) + margin)
     camera_location = target + axis_dir * distance
 
     if axis in {"+Z", "-Z"}:
@@ -457,21 +473,54 @@ def lock_camera_transforms(cam_obj, locked):
 
 
 def ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target_location, settings):
-    empty = ensure_camera_control_empty(cam_obj, rig_root, rig_col, True)
-    if empty:
-        empty["cam_rig_orbit_target"] = (target_location.x, target_location.y, target_location.z)
-        lock_camera_transforms(cam_obj, True)
+    name = get_control_empty_name(cam_obj.name)
+    empty = _find_tagged_object("EMPTY", name=name)
+    if empty is None or empty.get("cam_rig_camera") != cam_obj.name:
+        empty = bpy.data.objects.new(name, None)
+        empty.empty_display_type = "CIRCLE"
+        empty.empty_display_size = 1.5
+        empty.hide_viewport = False
+        empty.hide_render = True
+        empty.hide_set(False)
+        _tag_object(empty)
+        rig_col.objects.link(empty)
+    if empty.name not in rig_col.objects:
+        rig_col.objects.link(empty)
+
+    empty["cam_rig_camera"] = cam_obj.name
+    empty["cam_rig_orbit_target"] = (target_location.x, target_location.y, target_location.z)
+
+    # Place empty at orbit center and camera on the circle circumference.
+    empty.location = target_location
+    if rig_root:
+        parent_keep_world(empty, rig_root)
+
+    cam_world = cam_obj.matrix_world.copy()
+    radius_vec = cam_world.translation - target_location
+    radius = max(radius_vec.length, 0.1)
+    radius = max(radius, 1.5)
+    if radius_vec.length == 0.0:
+        radius_vec = Vector((1.0, 0.0, 0.0))
+    cam_world.translation = target_location + radius_vec.normalized() * radius
+    empty.empty_display_size = radius
+    cam_obj.parent = empty
+    cam_obj.matrix_parent_inverse = empty.matrix_world.inverted()
+    cam_obj.matrix_world = cam_world
+    lock_camera_transforms(cam_obj, True)
     return empty
 
 
 def ensure_curve_path_control(scene, rig_col, rig_root, cam_obj, target_location, settings):
     curve_obj = _find_tagged_object("CURVE", name="CAM_RIG_PATH")
+    cam_world = cam_obj.matrix_world.copy()
+    radius = max((cam_world.translation - target_location).length, 1.0)
     if curve_obj is None:
         curve_data = bpy.data.curves.new("CAM_RIG_PATH", type="CURVE")
         curve_data.dimensions = "3D"
+        curve_data.use_path = True
+        curve_data.path_duration = 100
         spline = curve_data.splines.new("BEZIER")
         spline.bezier_points.add(3)
-        radius = max((cam_obj.location - target_location).length, 1.0)
         points = [
             (radius, 0.0, 0.0),
             (0.0, radius, 0.0),
@@ -482,9 +531,24 @@ def ensure_curve_path_control(scene, rig_col, rig_root, cam_obj, target_location
             point.co = Vector(co)
             point.handle_left_type = "AUTO"
             point.handle_right_type = "AUTO"
+        spline.use_cyclic_u = True
         curve_obj = bpy.data.objects.new("CAM_RIG_PATH", curve_data)
         _tag_object(curve_obj)
         scene.collection.objects.link(curve_obj)
+    else:
+        curve_obj.data.use_path = True
+        spline = curve_obj.data.splines[0] if curve_obj.data.splines else None
+        if spline and spline.type == "BEZIER" and len(spline.bezier_points) >= 4:
+            points = [
+                (radius, 0.0, 0.0),
+                (0.0, radius, 0.0),
+                (-radius, 0.0, 0.0),
+                (0.0, -radius, 0.0),
+            ]
+            for point, co in zip(spline.bezier_points, points):
+                point.co = Vector(co)
+                point.handle_left_type = "AUTO"
+                point.handle_right_type = "AUTO"
     if curve_obj.name not in rig_col.objects:
         rig_col.objects.link(curve_obj)
     curve_obj.location = target_location
@@ -498,6 +562,10 @@ def ensure_curve_path_control(scene, rig_col, rig_root, cam_obj, target_location
     con.use_curve_follow = True
     con.forward_axis = "FORWARD_Y"
     con.up_axis = "UP_Z"
+    con.use_fixed_location = True
+    vec = cam_world.translation - target_location
+    angle = math.atan2(vec.y, vec.x)
+    con.offset_factor = (angle / (math.pi * 2.0)) % 1.0
     lock_camera_transforms(cam_obj, True)
     return curve_obj
 
@@ -538,6 +606,16 @@ def _orbit_follow_constraint(cam_obj):
     return next((c for c in cam_obj.constraints if c.type == "FOLLOW_PATH"), None)
 
 
+def _orbit_min_radius(context, target_location):
+    subjects = get_selected_subjects(context)
+    if not subjects:
+        return 0.1
+    bounds = selection_world_bounds(subjects, context.evaluated_depsgraph_get())
+    if not bounds:
+        return 0.1
+    return max(bounds["max_dim"] * 0.6, 0.1)
+
+
 def move_orbit_left(context):
     settings = get_settings(context)
     cam_obj = get_active_camera(context)
@@ -561,11 +639,7 @@ def move_orbit_left(context):
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
-    target = _orbit_target_location(context, empty)
-    vec = empty.matrix_world.translation - target
-    angle = step * 0.0174533
-    rot = Vector((vec.x, vec.y, 0.0)).rotated(Matrix.Rotation(angle, 4, "Z"))
-    empty.location = Vector((target.x + rot.x, target.y + rot.y, empty.location.z))
+    empty.rotation_euler.z += math.radians(step)
     return None
 
 
@@ -592,11 +666,7 @@ def move_orbit_right(context):
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
-    target = _orbit_target_location(context, empty)
-    vec = empty.matrix_world.translation - target
-    angle = -step * 0.0174533
-    rot = Vector((vec.x, vec.y, 0.0)).rotated(Matrix.Rotation(angle, 4, "Z"))
-    empty.location = Vector((target.x + rot.x, target.y + rot.y, empty.location.z))
+    empty.rotation_euler.z -= math.radians(step)
     return None
 
 
@@ -665,7 +735,13 @@ def move_orbit_closer(context):
             curve = _orbit_curve_for_camera()
             if curve is None:
                 return "Curve path control not found."
-        curve.scale *= (1.0 - settings.orbit_distance_step * 0.1)
+        target = curve.matrix_world.translation
+        vec = cam_obj.matrix_world.translation - target
+        if vec.length == 0.0:
+            vec = Vector((1.0, 0.0, 0.0))
+        min_radius = _orbit_min_radius(context, target)
+        new_radius = max(vec.length - settings.orbit_distance_step, min_radius)
+        curve.scale *= new_radius / max(vec.length, 0.001)
         return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
@@ -675,10 +751,15 @@ def move_orbit_closer(context):
         if empty is None:
             return "Circle control not found."
     target = _orbit_target_location(context, empty)
-    vec = empty.matrix_world.translation - target
-    if vec.length > 0.0:
-        vec = vec.normalized() * max(vec.length - settings.orbit_distance_step, 0.1)
-        empty.location = target + vec
+    cam_world = cam_obj.matrix_world.copy()
+    vec = cam_world.translation - target
+    if vec.length == 0.0:
+        vec = Vector((1.0, 0.0, 0.0))
+    min_radius = _orbit_min_radius(context, target)
+    new_radius = max(vec.length - settings.orbit_distance_step, min_radius)
+    cam_world.translation = target + vec.normalized() * new_radius
+    cam_obj.matrix_world = cam_world
+    empty.empty_display_size = new_radius
     return None
 
 
@@ -695,7 +776,12 @@ def move_orbit_farther(context):
             curve = _orbit_curve_for_camera()
             if curve is None:
                 return "Curve path control not found."
-        curve.scale *= (1.0 + settings.orbit_distance_step * 0.1)
+        target = curve.matrix_world.translation
+        vec = cam_obj.matrix_world.translation - target
+        if vec.length == 0.0:
+            vec = Vector((1.0, 0.0, 0.0))
+        new_radius = vec.length + settings.orbit_distance_step
+        curve.scale *= new_radius / max(vec.length, 0.001)
         return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
@@ -705,10 +791,14 @@ def move_orbit_farther(context):
         if empty is None:
             return "Circle control not found."
     target = _orbit_target_location(context, empty)
-    vec = empty.matrix_world.translation - target
-    if vec.length > 0.0:
-        vec = vec.normalized() * (vec.length + settings.orbit_distance_step)
-        empty.location = target + vec
+    cam_world = cam_obj.matrix_world.copy()
+    vec = cam_world.translation - target
+    if vec.length == 0.0:
+        vec = Vector((1.0, 0.0, 0.0))
+    new_radius = vec.length + settings.orbit_distance_step
+    cam_world.translation = target + vec.normalized() * new_radius
+    cam_obj.matrix_world = cam_world
+    empty.empty_display_size = new_radius
     return None
 
 
@@ -727,7 +817,7 @@ def start_auto_orbit(context):
             if con is None:
                 return "Curve path control not found."
         fcurve = con.driver_add("offset_factor")
-        fcurve.driver.expression = f"(frame*{speed})%1"
+        fcurve.driver.expression = f"(frame*{speed}/360.0)%1"
         return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
@@ -737,7 +827,7 @@ def start_auto_orbit(context):
         if empty is None:
             return "Circle control not found."
     fcurve = empty.driver_add("rotation_euler", 2)
-    fcurve.driver.expression = f"frame*{speed}"
+    fcurve.driver.expression = f"frame*{speed}*0.0174533"
     return None
 
 

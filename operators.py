@@ -32,6 +32,7 @@ from .camera_utils import (
 class CAMRIG_OT_create_rig(bpy.types.Operator):
     bl_idname = "camrig.create_rig"
     bl_label = "Create/Update Selected Shot"
+    bl_description = "Create the base rig and only the currently selected shot camera"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -40,10 +41,12 @@ class CAMRIG_OT_create_rig(bpy.types.Operator):
 
     def execute(self, context):
         settings = get_settings(context)
-        err = create_shot_camera(context, settings.selected_shot, index=0)
+        cam_obj, err = create_shot_camera(context, settings.selected_shot, index=0)
         if err:
             self.report({"ERROR"}, err)
             return {"CANCELLED"}
+        if cam_obj:
+            context.scene.camera = cam_obj
         self.report({"INFO"}, "Rig created for selected shot.")
         return {"FINISHED"}
 
@@ -51,6 +54,7 @@ class CAMRIG_OT_create_rig(bpy.types.Operator):
 class CAMRIG_OT_create_shot(bpy.types.Operator):
     bl_idname = "camrig.create_shot"
     bl_label = "Create Shot"
+    bl_description = "Create the selected shot type camera and set it active"
     bl_options = {"REGISTER", "UNDO"}
 
     shot_id: bpy.props.EnumProperty(items=SHOT_ENUM_ITEMS)
@@ -76,6 +80,7 @@ class CAMRIG_OT_create_shot(bpy.types.Operator):
 class CAMRIG_OT_set_active(bpy.types.Operator):
     bl_idname = "camrig.set_active"
     bl_label = "Set Active Shot"
+    bl_description = "Switch the scene camera to the chosen shot"
 
     shot_id: bpy.props.EnumProperty(items=SHOT_ENUM_ITEMS)
 
@@ -89,6 +94,7 @@ class CAMRIG_OT_set_active(bpy.types.Operator):
 class CAMRIG_OT_view_selected_camera(bpy.types.Operator):
     bl_idname = "camrig.view_selected_camera"
     bl_label = "View Selected Camera"
+    bl_description = "Set the active camera to the selected camera and view through it"
 
     def execute(self, context):
         obj = context.view_layer.objects.active
@@ -101,19 +107,25 @@ class CAMRIG_OT_view_selected_camera(bpy.types.Operator):
 class CAMRIG_OT_turntable(bpy.types.Operator):
     bl_idname = "camrig.turntable"
     bl_label = "Create Turntable"
+    bl_description = "Create a turntable animation based on the current settings"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
+        settings = get_settings(context)
+        scene = context.scene
         err = create_turntable(context)
         if err:
             self.report({"WARNING"}, err)
             return {"CANCELLED"}
+        end = scene.frame_start + max(settings.turntable_frames, 1)
+        self.report({"INFO"}, f"Turntable animation created from frame {scene.frame_start} to {end}.")
         return {"FINISHED"}
 
 
 class CAMRIG_OT_apply_composition(bpy.types.Operator):
     bl_idname = "camrig.apply_composition"
     bl_label = "Apply Composition"
+    bl_description = "Reframe the active camera using the current composition settings"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -164,6 +176,7 @@ def apply_preset(context, preset):
 class CAMRIG_OT_apply_preset(bpy.types.Operator):
     bl_idname = "camrig.apply_preset"
     bl_label = "Apply Preset"
+    bl_description = "Apply the selected cinematic preset to the active camera"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -178,6 +191,7 @@ class CAMRIG_OT_apply_preset(bpy.types.Operator):
 class CAMRIG_OT_orbit_left(bpy.types.Operator):
     bl_idname = "camrig.orbit_left"
     bl_label = "Orbit Left"
+    bl_description = "Move the orbit camera counterclockwise around the subject"
 
     def execute(self, context):
         err = move_orbit_left(context)
@@ -190,6 +204,7 @@ class CAMRIG_OT_orbit_left(bpy.types.Operator):
 class CAMRIG_OT_orbit_right(bpy.types.Operator):
     bl_idname = "camrig.orbit_right"
     bl_label = "Orbit Right"
+    bl_description = "Move the orbit camera clockwise around the subject"
 
     def execute(self, context):
         err = move_orbit_right(context)
@@ -202,6 +217,7 @@ class CAMRIG_OT_orbit_right(bpy.types.Operator):
 class CAMRIG_OT_raise_camera(bpy.types.Operator):
     bl_idname = "camrig.raise_camera"
     bl_label = "Raise Camera"
+    bl_description = "Raise the orbit camera upward"
 
     def execute(self, context):
         err = raise_camera_orbit(context)
@@ -214,6 +230,7 @@ class CAMRIG_OT_raise_camera(bpy.types.Operator):
 class CAMRIG_OT_lower_camera(bpy.types.Operator):
     bl_idname = "camrig.lower_camera"
     bl_label = "Lower Camera"
+    bl_description = "Lower the orbit camera downward"
 
     def execute(self, context):
         err = lower_camera_orbit(context)
@@ -226,6 +243,7 @@ class CAMRIG_OT_lower_camera(bpy.types.Operator):
 class CAMRIG_OT_move_closer(bpy.types.Operator):
     bl_idname = "camrig.move_closer"
     bl_label = "Move Closer"
+    bl_description = "Move the orbit camera closer to the subject"
 
     def execute(self, context):
         err = move_orbit_closer(context)
@@ -238,6 +256,7 @@ class CAMRIG_OT_move_closer(bpy.types.Operator):
 class CAMRIG_OT_move_farther(bpy.types.Operator):
     bl_idname = "camrig.move_farther"
     bl_label = "Move Farther"
+    bl_description = "Move the orbit camera farther from the subject"
 
     def execute(self, context):
         err = move_orbit_farther(context)
@@ -250,6 +269,7 @@ class CAMRIG_OT_move_farther(bpy.types.Operator):
 class CAMRIG_OT_start_auto_orbit(bpy.types.Operator):
     bl_idname = "camrig.start_auto_orbit"
     bl_label = "Start Auto Orbit"
+    bl_description = "Start automated orbit motion for the current orbit mode"
 
     def execute(self, context):
         err = start_auto_orbit(context)
@@ -262,6 +282,7 @@ class CAMRIG_OT_start_auto_orbit(bpy.types.Operator):
 class CAMRIG_OT_stop_auto_orbit(bpy.types.Operator):
     bl_idname = "camrig.stop_auto_orbit"
     bl_label = "Stop Auto Orbit"
+    bl_description = "Stop automated orbit motion"
 
     def execute(self, context):
         err = stop_auto_orbit(context)
@@ -274,6 +295,7 @@ class CAMRIG_OT_stop_auto_orbit(bpy.types.Operator):
 class CAMRIG_OT_analyze_scene(bpy.types.Operator):
     bl_idname = "camrig.analyze_scene"
     bl_label = "Analyze Scene"
+    bl_description = "Analyze the scene and suggest useful shot types"
 
     def execute(self, context):
         settings = get_settings(context)
@@ -293,6 +315,7 @@ class CAMRIG_OT_analyze_scene(bpy.types.Operator):
 class CAMRIG_OT_generate_suggestion(bpy.types.Operator):
     bl_idname = "camrig.generate_suggestion"
     bl_label = "Generate Suggested Shot"
+    bl_description = "Create the currently selected suggestion as a camera"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -320,6 +343,7 @@ class CAMRIG_OT_generate_suggestion(bpy.types.Operator):
 class CAMRIG_OT_generate_coverage(bpy.types.Operator):
     bl_idname = "camrig.generate_coverage"
     bl_label = "Generate Coverage Set"
+    bl_description = "Create cameras for all current suggestions"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -340,6 +364,7 @@ class CAMRIG_OT_generate_coverage(bpy.types.Operator):
 class CAMRIG_OT_shot_save(bpy.types.Operator):
     bl_idname = "camrig.shot_save"
     bl_label = "Save Shot"
+    bl_description = "Save the active camera to the shot library"
 
     def execute(self, context):
         err = save_shot(context)
@@ -353,6 +378,7 @@ class CAMRIG_OT_shot_save(bpy.types.Operator):
 class CAMRIG_OT_shot_load(bpy.types.Operator):
     bl_idname = "camrig.shot_load"
     bl_label = "Load Shot"
+    bl_description = "Load the selected shot from the library"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -366,6 +392,7 @@ class CAMRIG_OT_shot_load(bpy.types.Operator):
 class CAMRIG_OT_shot_delete(bpy.types.Operator):
     bl_idname = "camrig.shot_delete"
     bl_label = "Delete Shot"
+    bl_description = "Delete the selected shot from the library"
 
     def execute(self, context):
         err = delete_shot(context)
@@ -378,6 +405,7 @@ class CAMRIG_OT_shot_delete(bpy.types.Operator):
 class CAMRIG_OT_dialogue(bpy.types.Operator):
     bl_idname = "camrig.dialogue"
     bl_label = "Create Dialogue Setup"
+    bl_description = "Create dialogue coverage for exactly two selected subjects"
     bl_options = {"REGISTER", "UNDO"}
 
     mode: bpy.props.EnumProperty(
