@@ -24,11 +24,12 @@ class CAMRIG_PT_setup(bpy.types.Panel):
         settings = get_settings(context)
         layout = self.layout
         layout.operator("camrig.create_rig", icon="CAMERA_DATA")
+        layout.prop(settings, "selected_shot")
         layout.prop(settings, "axis")
         layout.prop(settings, "eye_level")
         layout.prop(settings, "tracking_enabled")
-        layout.prop(settings, "use_camera_control_empty")
         layout.prop(settings, "use_camera_circle_parent")
+        layout.prop(settings, "use_curve_path")
         layout.prop(settings, "look_at_target")
         layout.prop(settings, "height_offset")
 
@@ -124,8 +125,8 @@ class CAMRIG_PT_composition(bpy.types.Panel):
         layout.operator("camrig.apply_composition", icon="ORIENTATION_VIEW")
 
 
-class CAMRIG_PT_transition(bpy.types.Panel):
-    bl_label = "Shot Transition"
+class CAMRIG_PT_orbit_controls(bpy.types.Panel):
+    bl_label = "Circle / Path Controls"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Cam Rig"
@@ -133,12 +134,23 @@ class CAMRIG_PT_transition(bpy.types.Panel):
     def draw(self, context):
         settings = get_settings(context)
         layout = self.layout
-        layout.prop(settings, "transition_type")
-        layout.prop(settings, "transition_source")
-        layout.prop(settings, "transition_target")
-        layout.prop(settings, "transition_start")
-        layout.prop(settings, "transition_end")
-        layout.operator("camrig.transition", icon="ANIM")
+        layout.prop(settings, "use_camera_circle_parent")
+        layout.prop(settings, "use_curve_path")
+        layout.prop(settings, "orbit_step")
+        layout.prop(settings, "orbit_height_step")
+        layout.prop(settings, "orbit_distance_step")
+        row = layout.row(align=True)
+        row.operator("camrig.orbit_left", text="Orbit Left")
+        row.operator("camrig.orbit_right", text="Orbit Right")
+        row = layout.row(align=True)
+        row.operator("camrig.raise_camera", text="Raise Camera")
+        row.operator("camrig.lower_camera", text="Lower Camera")
+        row = layout.row(align=True)
+        row.operator("camrig.move_closer", text="Move Closer")
+        row.operator("camrig.move_farther", text="Move Farther")
+        row = layout.row(align=True)
+        row.operator("camrig.start_auto_orbit", text="Start Auto Orbit")
+        row.operator("camrig.stop_auto_orbit", text="Stop Auto Orbit")
 
 
 class CAMRIG_PT_presets(bpy.types.Panel):
@@ -151,6 +163,7 @@ class CAMRIG_PT_presets(bpy.types.Panel):
         settings = get_settings(context)
         layout = self.layout
         layout.prop(settings, "preset")
+        layout.prop(settings, "preset_mode")
         layout.operator("camrig.apply_preset", icon="PRESET")
 
 
@@ -180,7 +193,7 @@ CLASSES = (
     CAMRIG_PT_turntable,
     CAMRIG_PT_shot_library,
     CAMRIG_PT_composition,
-    CAMRIG_PT_transition,
+    CAMRIG_PT_orbit_controls,
     CAMRIG_PT_presets,
     CAMRIG_PT_intelligent_framing,
 )

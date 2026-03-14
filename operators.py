@@ -4,21 +4,34 @@ from .camera_utils import (
     SHOT_DEFS,
     SHOT_ENUM_ITEMS,
     create_shot_camera,
-    create_shot_set,
     create_turntable,
     apply_composition_to_active,
     analyze_scene_for_shots,
+    compute_camera_transform,
+    get_active_camera,
     get_settings,
+    ensure_lookat,
+    ensure_collection,
+    ensure_root,
     switch_active_camera,
 )
 from .dialogue import create_dialogue_setup
-from .transitions import create_transition
 from .shot_library import delete_shot, load_shot, save_shot
+from .camera_utils import (
+    move_orbit_left,
+    move_orbit_right,
+    raise_camera_orbit,
+    lower_camera_orbit,
+    move_orbit_closer,
+    move_orbit_farther,
+    start_auto_orbit,
+    stop_auto_orbit,
+)
 
 
 class CAMRIG_OT_create_rig(bpy.types.Operator):
     bl_idname = "camrig.create_rig"
-    bl_label = "Create/Update Shot Cameras"
+    bl_label = "Create/Update Selected Shot"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -26,11 +39,12 @@ class CAMRIG_OT_create_rig(bpy.types.Operator):
         return context.mode == "OBJECT"
 
     def execute(self, context):
-        err = create_shot_set(context)
+        settings = get_settings(context)
+        err = create_shot_camera(context, settings.selected_shot, index=0)
         if err:
             self.report({"ERROR"}, err)
             return {"CANCELLED"}
-        self.report({"INFO"}, "Shot cameras updated.")
+        self.report({"INFO"}, "Rig created for selected shot.")
         return {"FINISHED"}
 
 
@@ -117,6 +131,30 @@ def apply_preset(context, preset):
         settings.thirds_h = "CENTER"
         settings.thirds_v = "MID"
         settings.eye_level = True
+        if settings.preset_mode == "OVERRIDE":
+            cam_obj = get_active_camera(context)
+            if cam_obj is None:
+                return "No active camera."
+            subjects = [ob for ob in context.selected_objects if ob.type in {"MESH", "ARMATURE", "EMPTY"}]
+            if not subjects:
+                return "Select a subject."
+            cam_loc, target, lens = compute_camera_transform(
+                context,
+                subjects,
+                cam_obj.get("cam_rig_shot", settings.selected_shot),
+                settings.axis,
+                settings.eye_level,
+            )
+            if cam_loc is None or target is None:
+                return "Unable to compute preset framing."
+            cam_obj.location = cam_loc
+            if lens:
+                cam_obj.data.lens = lens
+            rig_col = ensure_collection(context.scene)
+            root = ensure_root(context.scene, rig_col)
+            lookat_obj, _ = ensure_lookat(context.scene, rig_col, root, settings)
+            lookat_obj.location = target
+            return None
         return apply_composition_to_active(context)
     if preset == "HOLLYWOOD":
         return create_dialogue_setup(context, "SINGLES")
@@ -137,13 +175,96 @@ class CAMRIG_OT_apply_preset(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CAMRIG_OT_transition(bpy.types.Operator):
-    bl_idname = "camrig.transition"
-    bl_label = "Create Transition"
-    bl_options = {"REGISTER", "UNDO"}
+class CAMRIG_OT_orbit_left(bpy.types.Operator):
+    bl_idname = "camrig.orbit_left"
+    bl_label = "Orbit Left"
 
     def execute(self, context):
-        err = create_transition(context)
+        err = move_orbit_left(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_orbit_right(bpy.types.Operator):
+    bl_idname = "camrig.orbit_right"
+    bl_label = "Orbit Right"
+
+    def execute(self, context):
+        err = move_orbit_right(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_raise_camera(bpy.types.Operator):
+    bl_idname = "camrig.raise_camera"
+    bl_label = "Raise Camera"
+
+    def execute(self, context):
+        err = raise_camera_orbit(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_lower_camera(bpy.types.Operator):
+    bl_idname = "camrig.lower_camera"
+    bl_label = "Lower Camera"
+
+    def execute(self, context):
+        err = lower_camera_orbit(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_move_closer(bpy.types.Operator):
+    bl_idname = "camrig.move_closer"
+    bl_label = "Move Closer"
+
+    def execute(self, context):
+        err = move_orbit_closer(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_move_farther(bpy.types.Operator):
+    bl_idname = "camrig.move_farther"
+    bl_label = "Move Farther"
+
+    def execute(self, context):
+        err = move_orbit_farther(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_start_auto_orbit(bpy.types.Operator):
+    bl_idname = "camrig.start_auto_orbit"
+    bl_label = "Start Auto Orbit"
+
+    def execute(self, context):
+        err = start_auto_orbit(context)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_stop_auto_orbit(bpy.types.Operator):
+    bl_idname = "camrig.stop_auto_orbit"
+    bl_label = "Stop Auto Orbit"
+
+    def execute(self, context):
+        err = stop_auto_orbit(context)
         if err:
             self.report({"WARNING"}, err)
             return {"CANCELLED"}
@@ -284,7 +405,6 @@ CLASSES = (
     CAMRIG_OT_turntable,
     CAMRIG_OT_apply_composition,
     CAMRIG_OT_apply_preset,
-    CAMRIG_OT_transition,
     CAMRIG_OT_analyze_scene,
     CAMRIG_OT_generate_suggestion,
     CAMRIG_OT_generate_coverage,
@@ -292,4 +412,12 @@ CLASSES = (
     CAMRIG_OT_shot_load,
     CAMRIG_OT_shot_delete,
     CAMRIG_OT_dialogue,
+    CAMRIG_OT_orbit_left,
+    CAMRIG_OT_orbit_right,
+    CAMRIG_OT_raise_camera,
+    CAMRIG_OT_lower_camera,
+    CAMRIG_OT_move_closer,
+    CAMRIG_OT_move_farther,
+    CAMRIG_OT_start_auto_orbit,
+    CAMRIG_OT_stop_auto_orbit,
 )

@@ -1,13 +1,13 @@
 # Cam Rig Generator
 
-Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. It builds shot camera sets around your selection, keeps them aimed at a LookAt target, and adds dialogue, turntable, composition, and transition tools.
+Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. It builds shot camera sets around your selection, keeps them aimed at a LookAt target, and adds dialogue, turntable, composition, and orbit tools.
 
 ## Features
 - Shot camera set: Extreme Close-Up, Close-Up, Medium, Medium Full, Full Body, Wide
 - Rig tracking: rig root follows a selected subject with a toggle
 - Look-at target: auto LookAt empty or user-defined target object
 - Rule of Thirds composition tool with horizontal/vertical placement
-- Shot transitions: Cut, Dolly, Zoom with frame ranges
+- Orbit controls: circle empty or curve path helpers
 - Dialogue setup: OTS A/B, Singles A/B, Two Shot
 - Turntable creation (rotate camera or subject)
 - Cinematic presets: Kubrick framing, Wes Anderson symmetry, Hollywood dialogue
@@ -38,7 +38,7 @@ Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. 
 - **Turntable**: Create turntable animation and set rotation type
 - **Shot Library**: Save / Load / Delete saved shots
 - **Composition**: Rule of Thirds toggle and placement
-- **Shot Transition**: Cut / Dolly / Zoom between rig shots
+- **Circle / Path Controls**: orbit helpers and controls
 - **Cinematic Presets**: Kubrick / Wes Anderson / Hollywood dialogue
 - **Intelligent Framing**: Analyze scene and generate suggested shots
 

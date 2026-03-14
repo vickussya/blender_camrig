@@ -3,6 +3,7 @@ from mathutils import Vector
 from .camera_utils import (
     apply_tracking,
     apply_camera_parenting,
+    apply_orbit_controls,
     compute_camera_transform,
     create_or_get_camera,
     ensure_collection,
@@ -19,7 +20,8 @@ def create_dialogue_camera(scene, rig_col, root, settings, shot_id, name, camera
     cam_obj = create_or_get_camera(scene, rig_col, name, shot_id)
     cam_obj.location = camera_location
     apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
-    ensure_track_to(cam_obj, lookat_obj)
+    apply_orbit_controls(scene, rig_col, root, cam_obj, target_location, settings)
+    ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
     cam_obj[TARGET_PROP] = (target_location.x, target_location.y, target_location.z)
     lookat_obj.location = target_location
     return cam_obj
@@ -28,6 +30,9 @@ def create_dialogue_camera(scene, rig_col, root, settings, shot_id, name, camera
 def create_dialogue_setup(context, mode):
     settings = context.scene.camrig_settings
     scene = context.scene
+    subjects = [ob for ob in context.selected_objects if ob.type in {"MESH", "ARMATURE", "EMPTY"}]
+    if len(subjects) != 2:
+        return "Select exactly two dialogue participants."
     a, b = get_dialogue_subjects(context)
     if not a or not b:
         return "Select two dialogue participants."

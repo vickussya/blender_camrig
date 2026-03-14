@@ -6,7 +6,6 @@ from .camera_utils import (
     SHOT_ENUM_ITEMS,
     THIRDS_H_ITEMS,
     THIRDS_V_ITEMS,
-    TRANSITION_TYPES,
     TURNTABLE_TYPES,
 )
 
@@ -34,16 +33,17 @@ class CAMRIG_SuggestionItem(bpy.types.PropertyGroup):
 
 class CAMRIG_Settings(bpy.types.PropertyGroup):
     axis: bpy.props.EnumProperty(name="Axis", items=AXIS_ITEMS, default="-Y")
+    selected_shot: bpy.props.EnumProperty(name="Shot Type", items=SHOT_ENUM_ITEMS, default="MED_FULL")
     eye_level: bpy.props.BoolProperty(name="Eye Level", default=False)
     tracking_enabled: bpy.props.BoolProperty(name="Tracking", default=True)
-    use_camera_control_empty: bpy.props.BoolProperty(
-        name="Use Control Empty",
-        description="Parent cameras to a circle empty for easier manual adjustments",
-        default=False,
-    )
     use_camera_circle_parent: bpy.props.BoolProperty(
         name="Use Camera Circle Parent",
         description="Add a visible circle empty as a camera parent for manual control",
+        default=False,
+    )
+    use_curve_path: bpy.props.BoolProperty(
+        name="Use Curve Path",
+        description="Attach camera to an editable curve path orbit control",
         default=False,
     )
     look_at_target: bpy.props.PointerProperty(name="Look-at Target", type=bpy.types.Object)
@@ -58,16 +58,23 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
     thirds_h: bpy.props.EnumProperty(name="Horizontal", items=THIRDS_H_ITEMS, default="CENTER")
     thirds_v: bpy.props.EnumProperty(name="Vertical", items=THIRDS_V_ITEMS, default="MID")
 
-    transition_type: bpy.props.EnumProperty(name="Transition", items=TRANSITION_TYPES, default="CUT")
-    transition_source: bpy.props.EnumProperty(name="Source", items=SHOT_ENUM_ITEMS, default="CU")
-    transition_target: bpy.props.EnumProperty(name="Target", items=SHOT_ENUM_ITEMS, default="MED_FULL")
-    transition_start: bpy.props.IntProperty(name="Start Frame", default=1, min=1)
-    transition_end: bpy.props.IntProperty(name="End Frame", default=24, min=2)
-
     turntable_frames: bpy.props.IntProperty(name="Frames", default=120, min=1)
     turntable_type: bpy.props.EnumProperty(name="Rotation Type", items=TURNTABLE_TYPES, default="ROTATE_CAMERA")
 
     preset: bpy.props.EnumProperty(name="Preset", items=PRESET_ITEMS, default="KUBRICK")
+    preset_mode: bpy.props.EnumProperty(
+        name="Preset Mode",
+        items=[
+            ("OVERRIDE", "Override", "Preset overrides current framing"),
+            ("INFLUENCE", "Influence", "Preset adjusts framing while preserving shot"),
+        ],
+        default="OVERRIDE",
+    )
+
+    orbit_step: bpy.props.FloatProperty(name="Orbit Step", default=10.0, min=1.0)
+    orbit_height_step: bpy.props.FloatProperty(name="Height Step", default=0.2, min=0.01)
+    orbit_distance_step: bpy.props.FloatProperty(name="Distance Step", default=0.2, min=0.01)
+    auto_orbit_speed: bpy.props.FloatProperty(name="Auto Orbit Speed", default=0.5, min=0.01)
 
     shot_library: bpy.props.CollectionProperty(type=CAMRIG_ShotLibraryItem)
     shot_library_index: bpy.props.IntProperty(name="Shot Index", default=0)
