@@ -641,6 +641,45 @@ def _orbit_min_radius(context, target_location):
     return max(bounds["max_dim"] * 0.6, 0.1)
 
 
+def enforce_final_camera_outside_bounds(cam_obj, bounds, axis, shot_offset, margin):
+    if cam_obj is None or bounds is None:
+        return False, Vector((0.0, 0.0, 0.0))
+    cam_matrix = cam_obj.matrix_world.copy()
+    cam_world = cam_matrix.translation.copy()
+    correction = Vector((0.0, 0.0, 0.0))
+    if axis == "+X":
+        min_pos = bounds["max"].x + margin + shot_offset
+        if cam_world.x <= min_pos:
+            correction.x = min_pos - cam_world.x
+    elif axis == "-X":
+        max_pos = bounds["min"].x - margin - shot_offset
+        if cam_world.x >= max_pos:
+            correction.x = max_pos - cam_world.x
+    elif axis == "+Y":
+        min_pos = bounds["max"].y + margin + shot_offset
+        if cam_world.y <= min_pos:
+            correction.y = min_pos - cam_world.y
+    elif axis == "-Y":
+        max_pos = bounds["min"].y - margin - shot_offset
+        if cam_world.y >= max_pos:
+            correction.y = max_pos - cam_world.y
+    elif axis == "+Z":
+        min_pos = bounds["max"].z + margin + shot_offset
+        if cam_world.z <= min_pos:
+            correction.z = min_pos - cam_world.z
+    elif axis == "-Z":
+        max_pos = bounds["min"].z - margin - shot_offset
+        if cam_world.z >= max_pos:
+            correction.z = max_pos - cam_world.z
+
+    if correction.length > 0.0:
+        cam_matrix.translation = cam_world + correction
+        cam_obj.matrix_world = cam_matrix
+        cam_world = cam_obj.matrix_world.translation.copy()
+        return True, cam_world
+    return False, cam_world
+
+
 def move_orbit_left(context):
     settings = get_settings(context)
     cam_obj = get_active_camera(context)
@@ -913,21 +952,27 @@ def create_shot_camera(context, shot_id, index=0):
     print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
     if bounds:
         cam_world = cam_obj.matrix_world.translation
+        print("Initial camera world:", cam_world)
+        base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
+        shot_offset = max(base * {"ECU": 1.0, "CU": 1.5, "MED_WAIST": 2.5, "MED_FULL": 3.5, "FULL": 5.0, "WIDE": 7.5, "OTS_A": 2.5, "OTS_B": 2.5, "SINGLE_A": 2.5, "SINGLE_B": 2.5, "TWO_SHOT": 4.0, "TURNTABLE": 4.0}.get(shot_id, 2.5), base * 1.0)
+        margin = max(base * 0.1, 0.05)
+        corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
+        print("Final camera world:", final_world)
+        print("Final correction applied:", corrected)
         inside = False
         if settings.axis == "+X":
-            inside = cam_world.x <= bounds["max"].x
+            inside = final_world.x <= bounds["max"].x + margin
         elif settings.axis == "-X":
-            inside = cam_world.x >= bounds["min"].x
+            inside = final_world.x >= bounds["min"].x - margin
         elif settings.axis == "+Y":
-            inside = cam_world.y <= bounds["max"].y
+            inside = final_world.y <= bounds["max"].y + margin
         elif settings.axis == "-Y":
-            inside = cam_world.y >= bounds["min"].y
+            inside = final_world.y >= bounds["min"].y - margin
         elif settings.axis == "+Z":
-            inside = cam_world.z <= bounds["max"].z
+            inside = final_world.z <= bounds["max"].z + margin
         elif settings.axis == "-Z":
-            inside = cam_world.z >= bounds["min"].z
+            inside = final_world.z >= bounds["min"].z - margin
         print("INSIDE_BBOX_CHECK:", inside)
-        print("Final camera world:", cam_world)
 
     lookat_obj.location = target
 
@@ -1087,6 +1132,14 @@ def create_turntable(context):
     lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
     lookat_obj.location = target
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
+
+    base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
+    shot_offset = max(base * 4.0, base * 1.0)
+    margin = max(base * 0.1, 0.05)
+    corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
+    print("Turntable initial camera:", camera_location)
+    print("Turntable final camera:", final_world)
+    print("Turntable correction applied:", corrected)
 
     pivot.rotation_euler = Vector((0.0, 0.0, 0.0))
     pivot.keyframe_insert(data_path="rotation_euler", frame=start)

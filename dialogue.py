@@ -6,6 +6,7 @@ from .camera_utils import (
     apply_orbit_controls,
     compute_camera_transform,
     create_or_get_camera,
+    enforce_final_camera_outside_bounds,
     ensure_collection,
     ensure_lookat,
     ensure_root,
@@ -90,20 +91,29 @@ def create_dialogue_setup(context, mode):
         depsgraph = context.evaluated_depsgraph_get()
         bounds = selection_world_bounds([subject_for_target], depsgraph)
         if bounds:
-            cam_world = cam_obj.matrix_world.translation
+            base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
+            shot_offset = max(
+                base * {"ECU": 1.0, "CU": 1.5, "MED_WAIST": 2.5, "MED_FULL": 3.5, "FULL": 5.0, "WIDE": 7.5, "OTS_A": 2.5, "OTS_B": 2.5, "SINGLE_A": 2.5, "SINGLE_B": 2.5, "TWO_SHOT": 4.0, "TURNTABLE": 4.0}.get(shot_id, 2.5),
+                base * 1.0,
+            )
+            margin = max(base * 0.1, 0.05)
+            corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
+            print("Dialogue initial camera:", cam_obj.matrix_world.translation)
+            print("Dialogue final camera:", final_world)
+            print("Dialogue correction applied:", corrected)
             inside = False
             if settings.axis == "+X":
-                inside = cam_world.x <= bounds["max"].x
+                inside = final_world.x <= bounds["max"].x + margin
             elif settings.axis == "-X":
-                inside = cam_world.x >= bounds["min"].x
+                inside = final_world.x >= bounds["min"].x - margin
             elif settings.axis == "+Y":
-                inside = cam_world.y <= bounds["max"].y
+                inside = final_world.y <= bounds["max"].y + margin
             elif settings.axis == "-Y":
-                inside = cam_world.y >= bounds["min"].y
+                inside = final_world.y >= bounds["min"].y - margin
             elif settings.axis == "+Z":
-                inside = cam_world.z <= bounds["max"].z
+                inside = final_world.z <= bounds["max"].z + margin
             elif settings.axis == "-Z":
-                inside = cam_world.z >= bounds["min"].z
+                inside = final_world.z >= bounds["min"].z - margin
             print("DIALOGUE_INSIDE_BBOX_CHECK:", inside)
         if lens:
             cam_obj.data.lens = lens
