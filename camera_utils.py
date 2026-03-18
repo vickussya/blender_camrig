@@ -316,26 +316,50 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "TWO_SHOT": 4.0,
         "TURNTABLE": 4.0,
     }
-    distance = max(base * multipliers.get(shot_type, 2.5), base * 1.0)
-    # Ensure camera sits outside the subject bounds along the chosen axis.
+    shot_offset = max(base * multipliers.get(shot_type, 2.5), base * 1.0)
     margin = max(base * 0.1, 0.05)
+    half_extent = {
+        "+X": width * 0.5,
+        "-X": width * 0.5,
+        "+Y": depth * 0.5,
+        "-Y": depth * 0.5,
+        "+Z": height * 0.5,
+        "-Z": height * 0.5,
+    }.get(axis, depth * 0.5)
+    distance = half_extent + shot_offset + margin
+
+    # Guardrail: ensure camera is beyond the bbox along the chosen axis.
     if axis == "+X":
-        distance = max(distance, (bounds["max"].x - target.x) + margin)
+        distance = max(distance, (bounds["max"].x - anchors["center"].x) + margin + shot_offset)
     elif axis == "-X":
-        distance = max(distance, (target.x - bounds["min"].x) + margin)
+        distance = max(distance, (anchors["center"].x - bounds["min"].x) + margin + shot_offset)
     elif axis == "+Y":
-        distance = max(distance, (bounds["max"].y - target.y) + margin)
+        distance = max(distance, (bounds["max"].y - anchors["center"].y) + margin + shot_offset)
     elif axis == "-Y":
-        distance = max(distance, (target.y - bounds["min"].y) + margin)
+        distance = max(distance, (anchors["center"].y - bounds["min"].y) + margin + shot_offset)
     elif axis == "+Z":
-        distance = max(distance, (bounds["max"].z - target.z) + margin)
+        distance = max(distance, (bounds["max"].z - anchors["center"].z) + margin + shot_offset)
     elif axis == "-Z":
-        distance = max(distance, (target.z - bounds["min"].z) + margin)
+        distance = max(distance, (anchors["center"].z - bounds["min"].z) + margin + shot_offset)
     camera_location = target + axis_dir * distance
 
     if axis in {"+Z", "-Z"}:
         camera_location.x = anchors["center"].x
         camera_location.y = anchors["center"].y
+
+    # Final safety: push camera outside bbox if still too close on the axis.
+    if axis == "+X" and camera_location.x <= bounds["max"].x + margin:
+        camera_location.x = bounds["max"].x + margin
+    elif axis == "-X" and camera_location.x >= bounds["min"].x - margin:
+        camera_location.x = bounds["min"].x - margin
+    elif axis == "+Y" and camera_location.y <= bounds["max"].y + margin:
+        camera_location.y = bounds["max"].y + margin
+    elif axis == "-Y" and camera_location.y >= bounds["min"].y - margin:
+        camera_location.y = bounds["min"].y - margin
+    elif axis == "+Z" and camera_location.z <= bounds["max"].z + margin:
+        camera_location.z = bounds["max"].z + margin
+    elif axis == "-Z" and camera_location.z >= bounds["min"].z - margin:
+        camera_location.z = bounds["min"].z - margin
 
     lens_map = {
         "ECU": 85.0,
@@ -358,6 +382,9 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
     print("Target height:", target_height)
     print("Target location:", target)
     print("Axis vector:", axis_dir)
+    print("Half extent:", half_extent)
+    print("Shot offset:", shot_offset)
+    print("Margin:", margin)
     print("Distance:", distance)
     print("Camera location:", camera_location)
     print("Lens:", lens_map.get(shot_type))
@@ -497,12 +524,10 @@ def ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target_locati
 
     cam_world = cam_obj.matrix_world.copy()
     radius_vec = cam_world.translation - target_location
-    radius = max(radius_vec.length, 0.1)
-    radius = max(radius, 1.5)
     if radius_vec.length == 0.0:
         radius_vec = Vector((1.0, 0.0, 0.0))
-    cam_world.translation = target_location + radius_vec.normalized() * radius
-    empty.empty_display_size = radius
+    radius = max(radius_vec.length, 0.1)
+    empty.empty_display_size = max(radius, 1.5)
     cam_obj.parent = empty
     cam_obj.matrix_parent_inverse = empty.matrix_world.inverted()
     cam_obj.matrix_world = cam_world
@@ -850,6 +875,8 @@ def create_shot_camera(context, shot_id, index=0):
     subjects = get_selected_subjects(context)
     if not subjects:
         return None, "Select at least one object."
+    print("Subjects:", [ob.name for ob in subjects])
+    print("Shot type:", shot_id, "Axis:", settings.axis)
 
     shot_def = get_shot_def(shot_id)
     if shot_def is None:
@@ -884,6 +911,23 @@ def create_shot_camera(context, shot_id, index=0):
     print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
     print("camera lens:", cam_obj.data.lens)
     print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
+    if bounds:
+        cam_world = cam_obj.matrix_world.translation
+        inside = False
+        if settings.axis == "+X":
+            inside = cam_world.x <= bounds["max"].x
+        elif settings.axis == "-X":
+            inside = cam_world.x >= bounds["min"].x
+        elif settings.axis == "+Y":
+            inside = cam_world.y <= bounds["max"].y
+        elif settings.axis == "-Y":
+            inside = cam_world.y >= bounds["min"].y
+        elif settings.axis == "+Z":
+            inside = cam_world.z <= bounds["max"].z
+        elif settings.axis == "-Z":
+            inside = cam_world.z >= bounds["min"].z
+        print("INSIDE_BBOX_CHECK:", inside)
+        print("Final camera world:", cam_world)
 
     lookat_obj.location = target
 

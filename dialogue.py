@@ -12,6 +12,7 @@ from .camera_utils import (
     ensure_track_to,
     get_dialogue_subjects,
     get_primary_subject,
+    selection_world_bounds,
     TARGET_PROP,
 )
 
@@ -24,6 +25,8 @@ def create_dialogue_camera(scene, rig_col, root, settings, shot_id, name, camera
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
     cam_obj[TARGET_PROP] = (target_location.x, target_location.y, target_location.z)
     lookat_obj.location = target_location
+    print("Dialogue camera parent:", cam_obj.parent.name if cam_obj.parent else None)
+    print("Dialogue camera world:", cam_obj.matrix_world.translation)
     return cam_obj
 
 
@@ -84,6 +87,24 @@ def create_dialogue_setup(context, mode):
             target_location,
             lookat_obj,
         )
+        depsgraph = context.evaluated_depsgraph_get()
+        bounds = selection_world_bounds([subject_for_target], depsgraph)
+        if bounds:
+            cam_world = cam_obj.matrix_world.translation
+            inside = False
+            if settings.axis == "+X":
+                inside = cam_world.x <= bounds["max"].x
+            elif settings.axis == "-X":
+                inside = cam_world.x >= bounds["min"].x
+            elif settings.axis == "+Y":
+                inside = cam_world.y <= bounds["max"].y
+            elif settings.axis == "-Y":
+                inside = cam_world.y >= bounds["min"].y
+            elif settings.axis == "+Z":
+                inside = cam_world.z <= bounds["max"].z
+            elif settings.axis == "-Z":
+                inside = cam_world.z >= bounds["min"].z
+            print("DIALOGUE_INSIDE_BBOX_CHECK:", inside)
         if lens:
             cam_obj.data.lens = lens
         return None
