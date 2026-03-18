@@ -325,6 +325,7 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
 
     width = bounds["size"].x
     depth = bounds["size"].y
+    height = bounds["height"]
     base = max(width, depth, height, 0.1)
     multipliers = {
         "ECU": 1.0,
