@@ -4,6 +4,8 @@ import bpy
 from mathutils import Vector, Matrix
 
 
+DEBUG_CAM_RIG = False
+
 TOOL_PROP = "cam_rig_tool"
 SHOT_PROP = "cam_rig_shot"
 TARGET_PROP = "cam_rig_target"
@@ -242,6 +244,51 @@ def compute_subject_anchors(bounds):
     }
 
 
+def compute_target_height(bounds, shot_type, eye_level):
+    min_z = bounds["min"].z
+    height = bounds["height"]
+    eye_z = min_z + height * 0.88
+    base_z = {
+        "ECU": min_z + height * 0.88,
+        "CU": min_z + height * 0.84,
+        "MED_WAIST": min_z + height * 0.76,
+        "MED_FULL": min_z + height * 0.66,
+        "FULL": min_z + height * 0.52,
+        "WIDE": min_z + height * 0.50,
+        "OTS_A": min_z + height * 0.76,
+        "OTS_B": min_z + height * 0.76,
+        "SINGLE_A": min_z + height * 0.80,
+        "SINGLE_B": min_z + height * 0.80,
+        "TWO_SHOT": min_z + height * 0.58,
+        "TURNTABLE": min_z + height * 0.60,
+    }.get(shot_type, min_z + height * 0.68)
+
+    if not eye_level:
+        return base_z
+
+    width = bounds["size"].x
+    depth = bounds["size"].y
+    upright = height > max(width, depth) * 1.2
+    weights = {
+        "ECU": 1.0,
+        "CU": 0.9,
+        "MED_WAIST": 0.7,
+        "MED_FULL": 0.5,
+        "FULL": 0.2,
+        "WIDE": 0.1,
+        "OTS_A": 0.8,
+        "OTS_B": 0.8,
+        "SINGLE_A": 0.8,
+        "SINGLE_B": 0.8,
+        "TWO_SHOT": 0.35,
+        "TURNTABLE": 0.2,
+    }
+    weight = weights.get(shot_type, 0.5)
+    if upright:
+        weight = min(weight + 0.1, 1.0)
+    return base_z * (1.0 - weight) + eye_z * weight
+
+
 def get_shot_def(shot_id):
     for shot in SHOT_DEFS:
         if shot["id"] == shot_id:
@@ -269,30 +316,7 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
 
     settings = get_settings(context)
     anchors = compute_subject_anchors(bounds)
-    min_z = bounds["min"].z
-    height = bounds["height"]
-
-    shot_heights = {
-        "ECU": min_z + height * 0.88,
-        "CU": min_z + height * 0.82,
-        "MED_WAIST": min_z + height * 0.72,
-        "MED_FULL": min_z + height * 0.62,
-        "FULL": min_z + height * 0.50,
-        "WIDE": min_z + height * 0.50,
-        "OTS_A": min_z + height * 0.72,
-        "OTS_B": min_z + height * 0.72,
-        "SINGLE_A": min_z + height * 0.76,
-        "SINGLE_B": min_z + height * 0.76,
-        "TWO_SHOT": min_z + height * 0.58,
-        "TURNTABLE": min_z + height * 0.60,
-    }
-
-    neutral_height = min_z + height * 0.60
-    eye_height = min_z + height * 0.85
-    target_height = shot_heights.get(shot_type, neutral_height)
-    if eye_level:
-        target_height = max(target_height, eye_height)
-
+    target_height = compute_target_height(bounds, shot_type, eye_level)
     target = Vector((anchors["center"].x, anchors["center"].y, target_height))
     axis_dir = axis_vector(axis)
     if settings.rule_of_thirds:
@@ -376,18 +400,19 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "TURNTABLE": 35.0,
     }
 
-    print("Shot type:", shot_type)
-    print("BBox min:", bounds["min"], "max:", bounds["max"])
-    print("BBox center:", bounds["center"])
-    print("Target height:", target_height)
-    print("Target location:", target)
-    print("Axis vector:", axis_dir)
-    print("Half extent:", half_extent)
-    print("Shot offset:", shot_offset)
-    print("Margin:", margin)
-    print("Distance:", distance)
-    print("Camera location:", camera_location)
-    print("Lens:", lens_map.get(shot_type))
+    if DEBUG_CAM_RIG:
+        print("Shot type:", shot_type)
+        print("BBox min:", bounds["min"], "max:", bounds["max"])
+        print("BBox center:", bounds["center"])
+        print("Target height:", target_height)
+        print("Target location:", target)
+        print("Axis vector:", axis_dir)
+        print("Half extent:", half_extent)
+        print("Shot offset:", shot_offset)
+        print("Margin:", margin)
+        print("Distance:", distance)
+        print("Camera location:", camera_location)
+        print("Lens:", lens_map.get(shot_type))
 
     return camera_location, target, lens_map.get(shot_type)
 
@@ -469,12 +494,13 @@ def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled, name_ove
     camera_obj.matrix_parent_inverse = empty.matrix_world.inverted()
     camera_obj.matrix_world = cam_world
 
-    print("use_circle_parent:", enabled)
-    print("control empty:", empty.name)
-    print("control empty linked:", empty.name in rig_col.objects)
-    print("camera parent:", camera_obj.parent.name if camera_obj.parent else None)
-    print("camera world:", camera_obj.matrix_world.translation)
-    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
+    if DEBUG_CAM_RIG:
+        print("use_circle_parent:", enabled)
+        print("control empty:", empty.name)
+        print("control empty linked:", empty.name in rig_col.objects)
+        print("camera parent:", camera_obj.parent.name if camera_obj.parent else None)
+        print("camera world:", camera_obj.matrix_world.translation)
+        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
     return empty
 
 
@@ -914,8 +940,9 @@ def create_shot_camera(context, shot_id, index=0):
     subjects = get_selected_subjects(context)
     if not subjects:
         return None, "Select at least one object."
-    print("Subjects:", [ob.name for ob in subjects])
-    print("Shot type:", shot_id, "Axis:", settings.axis)
+    if DEBUG_CAM_RIG:
+        print("Subjects:", [ob.name for ob in subjects])
+        print("Shot type:", shot_id, "Axis:", settings.axis)
 
     shot_def = get_shot_def(shot_id)
     if shot_def is None:
@@ -941,24 +968,28 @@ def create_shot_camera(context, shot_id, index=0):
 
     cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
     cam_obj.data.lens = lens if lens else shot_def["lens"]
-    print("use_circle_parent:", settings.use_camera_circle_parent)
+    if DEBUG_CAM_RIG:
+        print("use_circle_parent:", settings.use_camera_circle_parent)
     axis_dir = axis_vector(settings.axis)
     distance = (camera_location - target).length
     place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
     apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
     apply_orbit_controls(scene, rig_col, root, cam_obj, target, settings)
-    print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
-    print("camera lens:", cam_obj.data.lens)
-    print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
+    if DEBUG_CAM_RIG:
+        print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
+        print("camera lens:", cam_obj.data.lens)
+        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
     if bounds:
         cam_world = cam_obj.matrix_world.translation
-        print("Initial camera world:", cam_world)
+        if DEBUG_CAM_RIG:
+            print("Initial camera world:", cam_world)
         base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
         shot_offset = max(base * {"ECU": 1.0, "CU": 1.5, "MED_WAIST": 2.5, "MED_FULL": 3.5, "FULL": 5.0, "WIDE": 7.5, "OTS_A": 2.5, "OTS_B": 2.5, "SINGLE_A": 2.5, "SINGLE_B": 2.5, "TWO_SHOT": 4.0, "TURNTABLE": 4.0}.get(shot_id, 2.5), base * 1.0)
         margin = max(base * 0.1, 0.05)
         corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
-        print("Final camera world:", final_world)
-        print("Final correction applied:", corrected)
+        if DEBUG_CAM_RIG:
+            print("Final camera world:", final_world)
+            print("Final correction applied:", corrected)
         inside = False
         if settings.axis == "+X":
             inside = final_world.x <= bounds["max"].x + margin
@@ -972,7 +1003,8 @@ def create_shot_camera(context, shot_id, index=0):
             inside = final_world.z <= bounds["max"].z + margin
         elif settings.axis == "-Z":
             inside = final_world.z >= bounds["min"].z - margin
-        print("INSIDE_BBOX_CHECK:", inside)
+        if DEBUG_CAM_RIG:
+            print("INSIDE_BBOX_CHECK:", inside)
 
     lookat_obj.location = target
 
@@ -1048,15 +1080,17 @@ def create_shot_set(context):
             continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
         cam_obj.data.lens = lens if lens else shot["lens"]
-        print("use_circle_parent:", settings.use_camera_circle_parent)
+        if DEBUG_CAM_RIG:
+            print("use_circle_parent:", settings.use_camera_circle_parent)
         axis_dir = axis_vector(settings.axis)
         distance = (camera_location - target).length
         place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
         apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
         apply_orbit_controls(scene, rig_col, root, cam_obj, target, settings)
-        print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
-        print("camera lens:", cam_obj.data.lens)
-        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
+        if DEBUG_CAM_RIG:
+            print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
+            print("camera lens:", cam_obj.data.lens)
+            print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
 
     if base_target is not None:
         lookat_obj.location = base_target
@@ -1137,9 +1171,10 @@ def create_turntable(context):
     shot_offset = max(base * 4.0, base * 1.0)
     margin = max(base * 0.1, 0.05)
     corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
-    print("Turntable initial camera:", camera_location)
-    print("Turntable final camera:", final_world)
-    print("Turntable correction applied:", corrected)
+    if DEBUG_CAM_RIG:
+        print("Turntable initial camera:", camera_location)
+        print("Turntable final camera:", final_world)
+        print("Turntable correction applied:", corrected)
 
     pivot.rotation_euler = Vector((0.0, 0.0, 0.0))
     pivot.keyframe_insert(data_path="rotation_euler", frame=start)

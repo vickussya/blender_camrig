@@ -6,6 +6,7 @@ from .camera_utils import (
     apply_orbit_controls,
     compute_camera_transform,
     create_or_get_camera,
+    DEBUG_CAM_RIG,
     enforce_final_camera_outside_bounds,
     ensure_collection,
     ensure_lookat,
@@ -26,8 +27,9 @@ def create_dialogue_camera(scene, rig_col, root, settings, shot_id, name, camera
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
     cam_obj[TARGET_PROP] = (target_location.x, target_location.y, target_location.z)
     lookat_obj.location = target_location
-    print("Dialogue camera parent:", cam_obj.parent.name if cam_obj.parent else None)
-    print("Dialogue camera world:", cam_obj.matrix_world.translation)
+    if DEBUG_CAM_RIG:
+        print("Dialogue camera parent:", cam_obj.parent.name if cam_obj.parent else None)
+        print("Dialogue camera world:", cam_obj.matrix_world.translation)
     return cam_obj
 
 
@@ -98,9 +100,10 @@ def create_dialogue_setup(context, mode):
             )
             margin = max(base * 0.1, 0.05)
             corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
-            print("Dialogue initial camera:", cam_obj.matrix_world.translation)
-            print("Dialogue final camera:", final_world)
-            print("Dialogue correction applied:", corrected)
+            if DEBUG_CAM_RIG:
+                print("Dialogue initial camera:", cam_obj.matrix_world.translation)
+                print("Dialogue final camera:", final_world)
+                print("Dialogue correction applied:", corrected)
             inside = False
             if settings.axis == "+X":
                 inside = final_world.x <= bounds["max"].x + margin
@@ -114,7 +117,8 @@ def create_dialogue_setup(context, mode):
                 inside = final_world.z <= bounds["max"].z + margin
             elif settings.axis == "-Z":
                 inside = final_world.z >= bounds["min"].z - margin
-            print("DIALOGUE_INSIDE_BBOX_CHECK:", inside)
+            if DEBUG_CAM_RIG:
+                print("DIALOGUE_INSIDE_BBOX_CHECK:", inside)
         if lens:
             cam_obj.data.lens = lens
         return None
