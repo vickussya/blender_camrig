@@ -8,6 +8,8 @@ def save_shot(context):
     cam_obj = context.scene.camera
     if cam_obj is None:
         return "No active camera to save."
+    if cam_obj.get(SHOT_PROP) == "TURNTABLE":
+        return "Turntable shots cannot be saved in Shot Library."
     item = settings.shot_library.add()
     item.name = cam_obj.name
     item.shot_id = cam_obj.get(SHOT_PROP, "MED_FULL")

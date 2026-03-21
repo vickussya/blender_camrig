@@ -141,9 +141,10 @@ def ensure_track_to(cam_obj, target_obj, enabled):
         cam_obj.constraints.remove(con)
     if not enabled:
         return
-    con = cam_obj.constraints.new(type="DAMPED_TRACK")
+    con = cam_obj.constraints.new(type="TRACK_TO")
     con.target = target_obj
     con.track_axis = "TRACK_NEGATIVE_Z"
+    con.up_axis = "UP_Y"
 
 
 def apply_tracking(root, subject, enabled):
