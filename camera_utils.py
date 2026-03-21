@@ -31,12 +31,6 @@ SHOT_ENUM_ITEMS = [
     ("MED_FULL", "Medium Full", "Knees / 3/4 framing"),
     ("FULL", "Full", "Full body"),
     ("WIDE", "Wide", "Wide / establishing"),
-    ("OTS_A", "OTS A", "Over-the-shoulder A"),
-    ("OTS_B", "OTS B", "Over-the-shoulder B"),
-    ("SINGLE_A", "Single A", "Single A"),
-    ("SINGLE_B", "Single B", "Single B"),
-    ("TWO_SHOT", "Two Shot", "Two shot"),
-    ("TURNTABLE", "Turntable", "Turntable camera"),
 ]
 
 AXIS_ITEMS = [
@@ -48,27 +42,9 @@ AXIS_ITEMS = [
     ("-Z", "-Z", "Place cameras along -Z"),
 ]
 
-THIRDS_H_ITEMS = [
-    ("LEFT", "Left Third", "Place subject near left third"),
-    ("CENTER", "Center", "Keep subject centered"),
-    ("RIGHT", "Right Third", "Place subject near right third"),
-]
-
-THIRDS_V_ITEMS = [
-    ("UPPER", "Upper Third", "Place subject near upper third"),
-    ("MID", "Midline", "Keep subject centered vertically"),
-    ("LOWER", "Lower Third", "Place subject near lower third"),
-]
-
 TURNTABLE_TYPES = [
     ("ROTATE_CAMERA", "Rotate Camera Around Subject", "Spin camera around subject"),
     ("ROTATE_SUBJECT", "Rotate Subject", "Rotate subject/root"),
-]
-
-PRESET_ITEMS = [
-    ("KUBRICK", "Kubrick Framing", "Centered symmetry / one-point feel"),
-    ("WES", "Wes Anderson Symmetry", "Balanced, frontal symmetry"),
-    ("HOLLYWOOD", "Hollywood Dialogue", "Shot-reverse-shot coverage"),
 ]
 
 
@@ -255,12 +231,6 @@ def compute_target_height(bounds, shot_type, eye_level):
         "MED_FULL": min_z + height * 0.66,
         "FULL": min_z + height * 0.52,
         "WIDE": min_z + height * 0.50,
-        "OTS_A": min_z + height * 0.76,
-        "OTS_B": min_z + height * 0.76,
-        "SINGLE_A": min_z + height * 0.80,
-        "SINGLE_B": min_z + height * 0.80,
-        "TWO_SHOT": min_z + height * 0.58,
-        "TURNTABLE": min_z + height * 0.60,
     }.get(shot_type, min_z + height * 0.68)
 
     if not eye_level:
@@ -276,12 +246,6 @@ def compute_target_height(bounds, shot_type, eye_level):
         "MED_FULL": 0.5,
         "FULL": 0.2,
         "WIDE": 0.1,
-        "OTS_A": 0.8,
-        "OTS_B": 0.8,
-        "SINGLE_A": 0.8,
-        "SINGLE_B": 0.8,
-        "TWO_SHOT": 0.35,
-        "TURNTABLE": 0.2,
     }
     weight = weights.get(shot_type, 0.5)
     if upright:
@@ -319,8 +283,6 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
     target_height = compute_target_height(bounds, shot_type, eye_level)
     target = Vector((anchors["center"].x, anchors["center"].y, target_height))
     axis_dir = axis_vector(axis)
-    if settings.rule_of_thirds:
-        target = apply_thirds_offset(target, bounds, settings, axis_dir)
     target.z += settings.height_offset
 
     width = bounds["size"].x
@@ -334,12 +296,6 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "MED_FULL": 3.5,
         "FULL": 5.0,
         "WIDE": 7.5,
-        "OTS_A": 2.5,
-        "OTS_B": 2.5,
-        "SINGLE_A": 2.5,
-        "SINGLE_B": 2.5,
-        "TWO_SHOT": 4.0,
-        "TURNTABLE": 4.0,
     }
     shot_offset = max(base * multipliers.get(shot_type, 2.5), base * 1.0)
     margin = max(base * 0.1, 0.05)
@@ -393,12 +349,6 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "MED_FULL": 40.0,
         "FULL": 35.0,
         "WIDE": 24.0,
-        "OTS_A": 50.0,
-        "OTS_B": 50.0,
-        "SINGLE_A": 50.0,
-        "SINGLE_B": 50.0,
-        "TWO_SHOT": 35.0,
-        "TURNTABLE": 35.0,
     }
 
     if DEBUG_CAM_RIG:
@@ -416,25 +366,6 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         print("Lens:", lens_map.get(shot_type))
 
     return camera_location, target, lens_map.get(shot_type)
-
-
-def apply_thirds_offset(target, bounds, settings, axis_dir):
-    if not settings.rule_of_thirds:
-        return target
-
-    max_dim = bounds["max_dim"]
-    height = bounds["height"]
-    up = Vector((0.0, 0.0, 1.0))
-    if abs(axis_dir.dot(up)) > 0.95:
-        up = Vector((0.0, 1.0, 0.0))
-    right = axis_dir.cross(up).normalized()
-
-    h_factor = {"LEFT": -0.25, "CENTER": 0.0, "RIGHT": 0.25}.get(settings.thirds_h, 0.0)
-    v_factor = {"UPPER": 0.25, "MID": 0.0, "LOWER": -0.25}.get(settings.thirds_v, 0.0)
-
-    h_offset = right * (max_dim * h_factor)
-    v_offset = up * (height * v_factor)
-    return target + h_offset + v_offset
 
 
 def create_or_get_camera(scene, rig_col, name, shot_id):
@@ -562,70 +493,7 @@ def ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target_locati
     return empty
 
 
-def ensure_curve_path_control(scene, rig_col, rig_root, cam_obj, target_location, settings):
-    curve_obj = _find_tagged_object("CURVE", name="CAM_RIG_PATH")
-    cam_world = cam_obj.matrix_world.copy()
-    radius = max((cam_world.translation - target_location).length, 1.0)
-    if curve_obj is None:
-        curve_data = bpy.data.curves.new("CAM_RIG_PATH", type="CURVE")
-        curve_data.dimensions = "3D"
-        curve_data.use_path = True
-        curve_data.path_duration = 100
-        spline = curve_data.splines.new("BEZIER")
-        spline.bezier_points.add(3)
-        points = [
-            (radius, 0.0, 0.0),
-            (0.0, radius, 0.0),
-            (-radius, 0.0, 0.0),
-            (0.0, -radius, 0.0),
-        ]
-        for point, co in zip(spline.bezier_points, points):
-            point.co = Vector(co)
-            point.handle_left_type = "AUTO"
-            point.handle_right_type = "AUTO"
-        spline.use_cyclic_u = True
-        curve_obj = bpy.data.objects.new("CAM_RIG_PATH", curve_data)
-        _tag_object(curve_obj)
-        scene.collection.objects.link(curve_obj)
-    else:
-        curve_obj.data.use_path = True
-        spline = curve_obj.data.splines[0] if curve_obj.data.splines else None
-        if spline and spline.type == "BEZIER" and len(spline.bezier_points) >= 4:
-            points = [
-                (radius, 0.0, 0.0),
-                (0.0, radius, 0.0),
-                (-radius, 0.0, 0.0),
-                (0.0, -radius, 0.0),
-            ]
-            for point, co in zip(spline.bezier_points, points):
-                point.co = Vector(co)
-                point.handle_left_type = "AUTO"
-                point.handle_right_type = "AUTO"
-    if curve_obj.name not in rig_col.objects:
-        rig_col.objects.link(curve_obj)
-    curve_obj.location = target_location
-    if rig_root:
-        parent_keep_world(curve_obj, rig_root)
-
-    con = next((c for c in cam_obj.constraints if c.type == "FOLLOW_PATH"), None)
-    if con is None:
-        con = cam_obj.constraints.new("FOLLOW_PATH")
-    con.target = curve_obj
-    con.use_curve_follow = True
-    con.forward_axis = "FORWARD_Y"
-    con.up_axis = "UP_Z"
-    con.use_fixed_location = True
-    vec = cam_world.translation - target_location
-    angle = math.atan2(vec.y, vec.x)
-    con.offset_factor = (angle / (math.pi * 2.0)) % 1.0
-    lock_camera_transforms(cam_obj, True)
-    return curve_obj
-
-
 def apply_orbit_controls(scene, rig_col, rig_root, cam_obj, target_location, settings):
-    if settings.use_curve_path:
-        ensure_curve_path_control(scene, rig_col, rig_root, cam_obj, target_location, settings)
-        return
     if settings.use_camera_circle_parent:
         ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target_location, settings)
         return
@@ -648,14 +516,6 @@ def _orbit_target_location(context, empty):
         return lookat.matrix_world.translation.copy()
     cam_obj = get_active_camera(context)
     return cam_obj.matrix_world.translation.copy() if cam_obj else Vector((0.0, 0.0, 0.0))
-
-
-def _orbit_curve_for_camera():
-    return _find_tagged_object("CURVE", name="CAM_RIG_PATH")
-
-
-def _orbit_follow_constraint(cam_obj):
-    return next((c for c in cam_obj.constraints if c.type == "FOLLOW_PATH"), None)
 
 
 def _orbit_min_radius(context, target_location):
@@ -713,16 +573,6 @@ def move_orbit_left(context):
     if cam_obj is None:
         return "No active camera."
     step = settings.orbit_step
-    if settings.use_curve_path:
-        con = _orbit_follow_constraint(cam_obj)
-        if con is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            con = _orbit_follow_constraint(cam_obj)
-            if con is None:
-                return "Curve path control not found."
-        con.offset_factor = (con.offset_factor - step / 360.0) % 1.0
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -740,16 +590,6 @@ def move_orbit_right(context):
     if cam_obj is None:
         return "No active camera."
     step = settings.orbit_step
-    if settings.use_curve_path:
-        con = _orbit_follow_constraint(cam_obj)
-        if con is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            con = _orbit_follow_constraint(cam_obj)
-            if con is None:
-                return "Curve path control not found."
-        con.offset_factor = (con.offset_factor + step / 360.0) % 1.0
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -766,16 +606,6 @@ def raise_camera_orbit(context):
     cam_obj = get_active_camera(context)
     if cam_obj is None:
         return "No active camera."
-    if settings.use_curve_path:
-        curve = _orbit_curve_for_camera()
-        if curve is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            curve = _orbit_curve_for_camera()
-            if curve is None:
-                return "Curve path control not found."
-        curve.location.z += settings.orbit_height_step
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -792,16 +622,6 @@ def lower_camera_orbit(context):
     cam_obj = get_active_camera(context)
     if cam_obj is None:
         return "No active camera."
-    if settings.use_curve_path:
-        curve = _orbit_curve_for_camera()
-        if curve is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            curve = _orbit_curve_for_camera()
-            if curve is None:
-                return "Curve path control not found."
-        curve.location.z -= settings.orbit_height_step
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -818,22 +638,6 @@ def move_orbit_closer(context):
     cam_obj = get_active_camera(context)
     if cam_obj is None:
         return "No active camera."
-    if settings.use_curve_path:
-        curve = _orbit_curve_for_camera()
-        if curve is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            curve = _orbit_curve_for_camera()
-            if curve is None:
-                return "Curve path control not found."
-        target = curve.matrix_world.translation
-        vec = cam_obj.matrix_world.translation - target
-        if vec.length == 0.0:
-            vec = Vector((1.0, 0.0, 0.0))
-        min_radius = _orbit_min_radius(context, target)
-        new_radius = max(vec.length - settings.orbit_distance_step, min_radius)
-        curve.scale *= new_radius / max(vec.length, 0.001)
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -859,21 +663,6 @@ def move_orbit_farther(context):
     cam_obj = get_active_camera(context)
     if cam_obj is None:
         return "No active camera."
-    if settings.use_curve_path:
-        curve = _orbit_curve_for_camera()
-        if curve is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            curve = _orbit_curve_for_camera()
-            if curve is None:
-                return "Curve path control not found."
-        target = curve.matrix_world.translation
-        vec = cam_obj.matrix_world.translation - target
-        if vec.length == 0.0:
-            vec = Vector((1.0, 0.0, 0.0))
-        new_radius = vec.length + settings.orbit_distance_step
-        curve.scale *= new_radius / max(vec.length, 0.001)
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -899,17 +688,6 @@ def start_auto_orbit(context):
     if cam_obj is None:
         return "No active camera."
     speed = settings.auto_orbit_speed
-    if settings.use_curve_path:
-        con = _orbit_follow_constraint(cam_obj)
-        if con is None:
-            target = _orbit_target_location(context, None)
-            ensure_curve_path_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
-            con = _orbit_follow_constraint(cam_obj)
-            if con is None:
-                return "Curve path control not found."
-        fcurve = con.driver_add("offset_factor")
-        fcurve.driver.expression = f"(frame*{speed}/360.0)%1"
-        return None
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
@@ -926,9 +704,6 @@ def stop_auto_orbit(context):
     cam_obj = get_active_camera(context)
     if cam_obj is None:
         return "No active camera."
-    con = _orbit_follow_constraint(cam_obj)
-    if con and con.animation_data:
-        con.driver_remove("offset_factor")
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty and empty.animation_data:
         empty.driver_remove("rotation_euler", 2)
@@ -1184,50 +959,12 @@ def create_turntable(context):
     return None
 
 
-def apply_composition_to_active(context):
-    settings = get_settings(context)
-    scene = context.scene
-    cam_obj = scene.camera
-    if cam_obj is None:
-        return "No active camera to apply composition."
-
-    subjects = get_selected_subjects(context)
-    if not subjects:
-        return "Select at least one object."
-
-    camera_location, target, lens = compute_camera_transform(
-        context,
-        subjects,
-        cam_obj.get(SHOT_PROP, "MED_FULL"),
-        settings.axis,
-        settings.eye_level,
-    )
-    if camera_location is None or target is None:
-        return "Unable to compute camera placement."
-
-    lookat_obj, auto_target = ensure_lookat(scene, ensure_collection(scene), ensure_root(scene, ensure_collection(scene)), settings)
-    lookat_obj.location = target
-    cam_obj.location = camera_location
-    if lens:
-        cam_obj.data.lens = lens
-    ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
-    cam_obj[TARGET_PROP] = (target.x, target.y, target.z)
-    return None
-
-
 def analyze_scene_for_shots(context):
     settings = get_settings(context)
     subjects = get_selected_subjects(context)
     depsgraph = context.evaluated_depsgraph_get()
 
     suggestions = []
-    if len(subjects) >= 2:
-        suggestions.append({"id": "OTS_A", "label": "OTS A", "reason": "Two subjects detected for dialogue coverage."})
-        suggestions.append({"id": "OTS_B", "label": "OTS B", "reason": "Reverse angle for dialogue."})
-        suggestions.append({"id": "TWO_SHOT", "label": "Two Shot", "reason": "Shared framing for both subjects."})
-        suggestions.append({"id": "SINGLES", "label": "Singles", "reason": "Individual close singles for each subject."})
-        return suggestions
-
     if not subjects:
         return suggestions
 

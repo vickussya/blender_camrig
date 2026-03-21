@@ -1,16 +1,13 @@
 # Cam Rig Generator
 
-Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. It builds shot camera sets around your selection, keeps them aimed at a LookAt target, and adds dialogue, turntable, composition, and orbit tools.
+Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. It builds shot camera sets around your selection, keeps them aimed at a LookAt target, and adds turntable, orbit, and shot library tools.
 
 ## Features
 - Shot camera set: Extreme Close-Up, Close-Up, Medium, Medium Full, Full Body, Wide
 - Rig tracking: rig root follows a selected subject with a toggle
 - Look-at target: auto LookAt empty or user-defined target object
-- Rule of Thirds composition tool with horizontal/vertical placement
-- Orbit controls: circle empty or curve path helpers
-- Dialogue setup: OTS A/B, Singles A/B, Two Shot
+- Orbit controls: circle empty helper
 - Turntable creation (rotate camera or subject)
-- Cinematic presets: Kubrick framing, Wes Anderson symmetry, Hollywood dialogue
 - Intelligent framing analysis with shot suggestions
 - Shot library saved in the .blend file
 - CAM_RIG collection organization + Numpad 0 quick view
@@ -28,31 +25,33 @@ Cam Rig Generator is a Blender add-on for cinematic camera blocking and previs. 
 2) Use **Setup** to set axis, eye level, tracking, and target.
 3) Click **Create/Update Shot Cameras**.
 4) Use **Shot Types** or **Quick Switch** to change cameras.
-5) Use **Composition** for Rule of Thirds framing.
+5) Use **Turntable** to create a turntable animation.
 
 ## Panels (N-sidebar)
 - **Setup**: Create rig, axis selection, eye level toggle, tracking, look-at target
 - **Shot Types**: Create specific shot types
 - **Quick Switch**: CU / Medium / Wide switches
-- **Create Dialogue Setup**: OTS A/B, Singles, Two Shot
 - **Turntable**: Create turntable animation and set rotation type
 - **Shot Library**: Save / Load / Delete saved shots
-- **Composition**: Rule of Thirds toggle and placement
-- **Circle / Path Controls**: orbit helpers and controls
-- **Cinematic Presets**: Kubrick / Wes Anderson / Hollywood dialogue
+- **Circle Controls**: orbit helpers and controls
 - **Intelligent Framing**: Analyze scene and generate suggested shots
 
 ## Naming and Non-Destructive Behavior
 - Cameras are named like: `CAM_ECU`, `CAM_CU_HEAD`, `CAM_MED_WAIST`, `CAM_MED_FULL`, `CAM_FULL_BODY`, `CAM_WIDE_EST`
-- Dialogue cameras: `CAM_OTS_A`, `CAM_OTS_B`, `CAM_SINGLE_A`, `CAM_SINGLE_B`, `CAM_TWO_SHOT`
 - LookAt target: `CAM_LOOKAT`
 - Rig root: `CAM_RIG_ROOT`
 - All add-on objects are placed in: `CAM_RIG`
 - The add-on avoids touching user cameras unless they are created by the add-on
 
+## Planned Features
+- Curve Path camera control
+- Dialogue setup tools (OTS A, OTS B, Singles, Two Shot)
+- Composition tools
+- Cinematic presets
+
+These features are temporarily disabled while the stable core workflow is refined.
+
 ## Notes
-- Tracking uses a Copy Location constraint on `CAM_RIG_ROOT`.
-- Rule of Thirds offsets the look-at target, not the subject.
 - Shot library data is stored in the scene and saved with the .blend file.
 
 ## Troubleshooting

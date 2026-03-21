@@ -4,7 +4,7 @@ bl_info = {
     "version": (2, 0, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar (N) > Cam Rig",
-    "description": "Cinematic camera rig with tracking, dialogue, turntable, presets, and shot library tools.",
+    "description": "Cinematic camera rig with tracking, turntable, and shot library tools.",
     "category": "Camera",
 }
 
@@ -12,12 +12,11 @@ import importlib
 
 import bpy
 
-from . import camera_utils, dialogue, operators, panels, properties, shot_library
+from . import camera_utils, operators, panels, properties, shot_library
 
 
 if "bpy" in locals():
     importlib.reload(camera_utils)
-    importlib.reload(dialogue)
     importlib.reload(shot_library)
     importlib.reload(properties)
     importlib.reload(operators)

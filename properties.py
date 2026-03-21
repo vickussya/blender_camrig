@@ -1,13 +1,6 @@
 import bpy
 
-from .camera_utils import (
-    AXIS_ITEMS,
-    PRESET_ITEMS,
-    SHOT_ENUM_ITEMS,
-    THIRDS_H_ITEMS,
-    THIRDS_V_ITEMS,
-    TURNTABLE_TYPES,
-)
+from .camera_utils import AXIS_ITEMS, SHOT_ENUM_ITEMS, TURNTABLE_TYPES
 
 
 class CAMRIG_ShotLibraryItem(bpy.types.PropertyGroup):
@@ -59,11 +52,6 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
         description="Add a visible circle empty as a camera parent for manual control",
         default=False,
     )
-    use_curve_path: bpy.props.BoolProperty(
-        name="Use Curve Path",
-        description="Attach camera to an editable curve path orbit control",
-        default=False,
-    )
     look_at_target: bpy.props.PointerProperty(
         name="Look-at Target",
         description="Optional target object the camera should aim at",
@@ -74,24 +62,6 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
         description="Additional height added to shot target points",
         default=0.0,
         step=1.0,
-    )
-
-    rule_of_thirds: bpy.props.BoolProperty(
-        name="Rule of Thirds",
-        description="Offset framing toward rule-of-thirds positions",
-        default=False,
-    )
-    thirds_h: bpy.props.EnumProperty(
-        name="Horizontal",
-        items=THIRDS_H_ITEMS,
-        description="Horizontal thirds placement",
-        default="CENTER",
-    )
-    thirds_v: bpy.props.EnumProperty(
-        name="Vertical",
-        items=THIRDS_V_ITEMS,
-        description="Vertical thirds placement",
-        default="MID",
     )
 
     turntable_frames: bpy.props.IntProperty(
@@ -105,22 +75,6 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
         items=TURNTABLE_TYPES,
         description="Choose whether to rotate the camera or the subject",
         default="ROTATE_CAMERA",
-    )
-
-    preset: bpy.props.EnumProperty(
-        name="Preset",
-        items=PRESET_ITEMS,
-        description="Select a cinematic framing preset",
-        default="KUBRICK",
-    )
-    preset_mode: bpy.props.EnumProperty(
-        name="Preset Mode",
-        items=[
-            ("OVERRIDE", "Override", "Preset overrides current framing"),
-            ("INFLUENCE", "Influence", "Preset adjusts framing while preserving shot"),
-        ],
-        description="How the preset should affect the current camera",
-        default="OVERRIDE",
     )
 
     orbit_step: bpy.props.FloatProperty(

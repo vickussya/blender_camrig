@@ -29,7 +29,6 @@ class CAMRIG_PT_setup(bpy.types.Panel):
         layout.prop(settings, "eye_level")
         layout.prop(settings, "tracking_enabled")
         layout.prop(settings, "use_camera_circle_parent")
-        layout.prop(settings, "use_curve_path")
         layout.prop(settings, "look_at_target")
         layout.prop(settings, "height_offset")
 
@@ -64,22 +63,6 @@ class CAMRIG_PT_quick_switch(bpy.types.Panel):
         row.operator("camrig.set_active", text="Switch to Wide").shot_id = "WIDE"
 
 
-class CAMRIG_PT_dialogue(bpy.types.Panel):
-    bl_label = "Create Dialogue Setup"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Cam Rig"
-
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row(align=True)
-        row.operator("camrig.dialogue", text="OTS A").mode = "OTS_A"
-        row.operator("camrig.dialogue", text="OTS B").mode = "OTS_B"
-        row = layout.row(align=True)
-        row.operator("camrig.dialogue", text="Singles").mode = "SINGLES"
-        row.operator("camrig.dialogue", text="Two Shot").mode = "TWO_SHOT"
-
-
 class CAMRIG_PT_turntable(bpy.types.Panel):
     bl_label = "Turntable"
     bl_space_type = "VIEW_3D"
@@ -110,23 +93,8 @@ class CAMRIG_PT_shot_library(bpy.types.Panel):
         row.operator("camrig.shot_delete", text="Delete Shot")
 
 
-class CAMRIG_PT_composition(bpy.types.Panel):
-    bl_label = "Composition"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Cam Rig"
-
-    def draw(self, context):
-        settings = get_settings(context)
-        layout = self.layout
-        layout.prop(settings, "rule_of_thirds")
-        layout.prop(settings, "thirds_h")
-        layout.prop(settings, "thirds_v")
-        layout.operator("camrig.apply_composition", icon="ORIENTATION_VIEW")
-
-
 class CAMRIG_PT_orbit_controls(bpy.types.Panel):
-    bl_label = "Circle / Path Controls"
+    bl_label = "Circle Controls"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Cam Rig"
@@ -135,9 +103,8 @@ class CAMRIG_PT_orbit_controls(bpy.types.Panel):
         settings = get_settings(context)
         layout = self.layout
         layout.prop(settings, "use_camera_circle_parent")
-        layout.prop(settings, "use_curve_path")
         controls = layout.column()
-        controls.enabled = settings.use_camera_circle_parent or settings.use_curve_path
+        controls.enabled = settings.use_camera_circle_parent
         controls.prop(settings, "orbit_step")
         controls.prop(settings, "orbit_height_step")
         controls.prop(settings, "orbit_distance_step")
@@ -154,20 +121,6 @@ class CAMRIG_PT_orbit_controls(bpy.types.Panel):
         row = controls.row(align=True)
         row.operator("camrig.start_auto_orbit", text="Start Auto Orbit")
         row.operator("camrig.stop_auto_orbit", text="Stop Auto Orbit")
-
-
-class CAMRIG_PT_presets(bpy.types.Panel):
-    bl_label = "Cinematic Presets"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Cam Rig"
-
-    def draw(self, context):
-        settings = get_settings(context)
-        layout = self.layout
-        layout.prop(settings, "preset")
-        layout.prop(settings, "preset_mode")
-        layout.operator("camrig.apply_preset", icon="PRESET")
 
 
 class CAMRIG_PT_intelligent_framing(bpy.types.Panel):
@@ -192,11 +145,8 @@ CLASSES = (
     CAMRIG_PT_setup,
     CAMRIG_PT_shot_types,
     CAMRIG_PT_quick_switch,
-    CAMRIG_PT_dialogue,
     CAMRIG_PT_turntable,
     CAMRIG_PT_shot_library,
-    CAMRIG_PT_composition,
     CAMRIG_PT_orbit_controls,
-    CAMRIG_PT_presets,
     CAMRIG_PT_intelligent_framing,
 )
