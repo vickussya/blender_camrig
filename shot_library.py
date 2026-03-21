@@ -1,6 +1,6 @@
 import bpy
 
-from .camera_utils import SHOT_PROP, get_settings
+from .camera_utils import SHOT_PROP, TARGET_OBJ_PROP, ensure_track_to, get_settings
 
 
 def save_shot(context):
@@ -15,12 +15,9 @@ def save_shot(context):
     item.location = cam_obj.location
     item.rotation = cam_obj.rotation_euler
     item.lens = cam_obj.data.lens
-    item.target_name = getattr(settings.look_at_target, "name", "")
+    item.target_name = cam_obj.get(TARGET_OBJ_PROP, "")
     item.axis = settings.axis
     item.eye_level = settings.eye_level
-    item.rule_of_thirds = settings.rule_of_thirds
-    item.thirds_h = settings.thirds_h
-    item.thirds_v = settings.thirds_v
     settings.shot_library_index = len(settings.shot_library) - 1
     return None
 
@@ -38,9 +35,11 @@ def load_shot(context):
     cam_obj.data.lens = item.lens
     settings.axis = item.axis or settings.axis
     settings.eye_level = item.eye_level
-    settings.rule_of_thirds = item.rule_of_thirds
-    settings.thirds_h = item.thirds_h or settings.thirds_h
-    settings.thirds_v = item.thirds_v or settings.thirds_v
+    if item.target_name:
+        target_obj = bpy.data.objects.get(item.target_name)
+        if target_obj:
+            cam_obj[TARGET_OBJ_PROP] = target_obj.name
+            ensure_track_to(cam_obj, target_obj, settings.tracking_enabled)
     context.scene.camera = cam_obj
     return None
 

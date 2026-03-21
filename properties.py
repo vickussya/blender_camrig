@@ -13,9 +13,6 @@ class CAMRIG_ShotLibraryItem(bpy.types.PropertyGroup):
     target_name: bpy.props.StringProperty(name="Target")
     axis: bpy.props.StringProperty(name="Axis")
     eye_level: bpy.props.BoolProperty(name="Eye Level")
-    rule_of_thirds: bpy.props.BoolProperty(name="Rule of Thirds")
-    thirds_h: bpy.props.StringProperty(name="Thirds H")
-    thirds_v: bpy.props.StringProperty(name="Thirds V")
 
 
 class CAMRIG_SuggestionItem(bpy.types.PropertyGroup):
@@ -73,7 +70,7 @@ class CAMRIG_Settings(bpy.types.PropertyGroup):
     turntable_type: bpy.props.EnumProperty(
         name="Rotation Type",
         items=TURNTABLE_TYPES,
-        description="Choose whether to rotate the camera or the subject",
+        description="Rotate the camera around the subject",
         default="ROTATE_CAMERA",
     )
 

@@ -14,6 +14,7 @@ SUBJECT_PROP = "cam_rig_subject"
 COLLECTION_NAME = "CAM_RIG"
 ROOT_NAME = "CAM_RIG_ROOT"
 LOOKAT_NAME = "CAM_LOOKAT"
+TARGET_OBJ_PROP = "cam_rig_target_obj"
 
 SHOT_DEFS = (
     {"id": "ECU", "name": "CAM_ECU", "label": "Extreme Close-up", "target_factor": 0.92, "lens": 85.0},
@@ -44,7 +45,6 @@ AXIS_ITEMS = [
 
 TURNTABLE_TYPES = [
     ("ROTATE_CAMERA", "Rotate Camera Around Subject", "Spin camera around subject"),
-    ("ROTATE_SUBJECT", "Rotate Subject", "Rotate subject/root"),
 ]
 
 
@@ -113,12 +113,13 @@ def ensure_root(scene, rig_col):
     return root
 
 
-def ensure_lookat(scene, rig_col, root, settings):
+def get_or_create_camera_target(scene, rig_col, root, settings, cam_obj):
     if settings.look_at_target:
         return settings.look_at_target, False
-    empty = _find_tagged_object("EMPTY", name=LOOKAT_NAME)
+    name = f"{LOOKAT_NAME}_{cam_obj.name}"
+    empty = _find_tagged_object("EMPTY", name=name)
     if empty is None:
-        empty = bpy.data.objects.new(LOOKAT_NAME, None)
+        empty = bpy.data.objects.new(name, None)
         empty.empty_display_type = "ARROWS"
         _tag_object(empty)
         scene.collection.objects.link(empty)
@@ -385,6 +386,7 @@ def place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, tracking_
     cam_obj.location = target + axis_dir * distance
     if lookat_obj:
         ensure_track_to(cam_obj, lookat_obj, tracking_enabled)
+        cam_obj[TARGET_OBJ_PROP] = lookat_obj.name
     cam_obj[TARGET_PROP] = (target.x, target.y, target.z)
 
 
@@ -511,10 +513,11 @@ def _orbit_target_location(context, empty):
     settings = get_settings(context)
     if settings.look_at_target:
         return settings.look_at_target.matrix_world.translation.copy()
-    lookat = _find_tagged_object("EMPTY", name=LOOKAT_NAME)
-    if lookat:
-        return lookat.matrix_world.translation.copy()
     cam_obj = get_active_camera(context)
+    if cam_obj and cam_obj.get(TARGET_OBJ_PROP):
+        target_obj = bpy.data.objects.get(cam_obj[TARGET_OBJ_PROP])
+        if target_obj:
+            return target_obj.matrix_world.translation.copy()
     return cam_obj.matrix_world.translation.copy() if cam_obj else Vector((0.0, 0.0, 0.0))
 
 
@@ -726,7 +729,6 @@ def create_shot_camera(context, shot_id, index=0):
 
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
-    lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
     depsgraph = context.evaluated_depsgraph_get()
     bounds = selection_world_bounds(subjects, depsgraph)
     if bounds:
@@ -743,6 +745,7 @@ def create_shot_camera(context, shot_id, index=0):
         return None, "Unable to compute camera placement."
 
     cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
+    lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
     cam_obj.data.lens = lens if lens else shot_def["lens"]
     if DEBUG_CAM_RIG:
         print("use_circle_parent:", settings.use_camera_circle_parent)
@@ -793,10 +796,11 @@ def switch_active_camera(context, shot_id):
         return False
     scene = context.scene
     scene.camera = cam_obj
-    lookat = _find_tagged_object("EMPTY", name=LOOKAT_NAME)
-    if lookat and cam_obj.get(TARGET_PROP):
-        target = cam_obj[TARGET_PROP]
-        lookat.location = Vector((target[0], target[1], target[2]))
+    if cam_obj.get(TARGET_OBJ_PROP) and cam_obj.get(TARGET_PROP):
+        target_obj = bpy.data.objects.get(cam_obj[TARGET_OBJ_PROP])
+        if target_obj:
+            target = cam_obj[TARGET_PROP]
+            target_obj.location = Vector((target[0], target[1], target[2]))
     return True
 
 
@@ -814,13 +818,10 @@ def ensure_rig_for_selection(context):
 
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
-    lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
 
     root.location = bounds["center"]
     subject = get_primary_subject(context)
     apply_tracking(root, subject, settings.tracking_enabled)
-
-    lookat_obj.location = bounds["center"]
 
     return bounds, None
 
@@ -835,15 +836,6 @@ def create_shot_set(context):
     scene = context.scene
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
-    lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
-    _, base_target, _ = compute_camera_transform(
-        context,
-        subjects,
-        "MED_FULL",
-        settings.axis,
-        settings.eye_level,
-    )
-
     for index, shot in enumerate(SHOT_DEFS):
         camera_location, target, lens = compute_camera_transform(
             context,
@@ -855,6 +847,7 @@ def create_shot_set(context):
         if camera_location is None or target is None:
             continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
+        lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
         cam_obj.data.lens = lens if lens else shot["lens"]
         if DEBUG_CAM_RIG:
             print("use_circle_parent:", settings.use_camera_circle_parent)
@@ -867,9 +860,6 @@ def create_shot_set(context):
             print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
             print("camera lens:", cam_obj.data.lens)
             print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
-
-    if base_target is not None:
-        lookat_obj.location = base_target
 
     scene.camera = _find_tagged_object("CAMERA", shot_id="MED_FULL") or scene.camera
     return None
@@ -894,14 +884,6 @@ def create_turntable(context):
 
     start = scene.frame_start
     end = start + max(settings.turntable_frames, 1)
-
-    if settings.turntable_type == "ROTATE_SUBJECT":
-        root.rotation_euler = Vector((0.0, 0.0, 0.0))
-        root.keyframe_insert(data_path="rotation_euler", frame=start)
-        root.rotation_euler = Vector((0.0, 0.0, 6.283185))
-        root.keyframe_insert(data_path="rotation_euler", frame=end)
-        lock_camera_transforms(root, True)
-        return None
 
     pivot = _find_tagged_object("EMPTY", name="CAM_TURNTABLE_PIVOT")
     if pivot is None:
@@ -939,7 +921,7 @@ def create_turntable(context):
     apply_camera_parenting(scene, rig_col, pivot, cam_obj, settings)
     lock_camera_transforms(cam_obj, True)
 
-    lookat_obj, auto_target = ensure_lookat(scene, rig_col, root, settings)
+    lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
     lookat_obj.location = target
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
 
