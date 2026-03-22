@@ -11,8 +11,10 @@ class CAMRIG_ShotLibraryItem(bpy.types.PropertyGroup):
     rotation: bpy.props.FloatVectorProperty(name="Rotation", size=3, subtype="EULER")
     lens: bpy.props.FloatProperty(name="Lens")
     target_name: bpy.props.StringProperty(name="Target")
+    target_location: bpy.props.FloatVectorProperty(name="Target Location", size=3, subtype="TRANSLATION")
     axis: bpy.props.StringProperty(name="Axis")
     eye_level: bpy.props.BoolProperty(name="Eye Level")
+    tracking_enabled: bpy.props.BoolProperty(name="Tracking")
 
 
 class CAMRIG_SuggestionItem(bpy.types.PropertyGroup):
