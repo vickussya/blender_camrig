@@ -15,7 +15,7 @@ class CAMRIG_UL_suggestions(bpy.types.UIList):
 
 
 class CAMRIG_PT_setup(bpy.types.Panel):
-    bl_label = "Setup"
+    bl_label = "Shot Creation"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Cam Rig"
@@ -34,7 +34,7 @@ class CAMRIG_PT_setup(bpy.types.Panel):
 
 
 class CAMRIG_PT_shot_types(bpy.types.Panel):
-    bl_label = "Shot Types"
+    bl_label = "Shot Presets"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Cam Rig"
@@ -50,7 +50,7 @@ class CAMRIG_PT_shot_types(bpy.types.Panel):
 
 
 class CAMRIG_PT_quick_switch(bpy.types.Panel):
-    bl_label = "Quick Switch"
+    bl_label = "Switch Shot"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Cam Rig"
@@ -64,7 +64,7 @@ class CAMRIG_PT_quick_switch(bpy.types.Panel):
 
 
 class CAMRIG_PT_turntable(bpy.types.Panel):
-    bl_label = "Turntable"
+    bl_label = "Turntable Animation"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Cam Rig"
