@@ -118,9 +118,6 @@ class CAMRIG_PT_orbit_controls(bpy.types.Panel):
         row = controls.row(align=True)
         row.operator("camrig.move_closer", text="Move Closer")
         row.operator("camrig.move_farther", text="Move Farther")
-        row = controls.row(align=True)
-        row.operator("camrig.start_auto_orbit", text="Start Auto Orbit")
-        row.operator("camrig.stop_auto_orbit", text="Stop Auto Orbit")
 
 
 class CAMRIG_PT_intelligent_framing(bpy.types.Panel):
