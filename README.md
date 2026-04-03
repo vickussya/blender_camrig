@@ -3,6 +3,9 @@
 Create cinematic shots in seconds, switch between shot sizes instantly, and keep cameras aimed correctly.
 Save and reload shots anytime for fast iteration and previs.
 
+## Blender Version
+Compatible with Blender 3.0+.
+
 ## Features
 
 ### Shot Creation
@@ -55,6 +58,7 @@ Analyze the scene and get automatic cinematic shot suggestions.
 2) In Blender, go to `Edit -> Preferences -> Add-ons`.
 3) Click **Install...** and select the ZIP.
 4) Enable the add-on by ticking the checkbox.
+5) Requires Blender 3.0+.
 
 ## Roadmap
 - More presets
