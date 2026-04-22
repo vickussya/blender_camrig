@@ -840,9 +840,6 @@ def create_shot_camera(context, shot_id, index=0):
     apply_tracking(root, get_primary_subject(context), settings.tracking_enabled)
 
     lookat_obj, auto_target = get_or_create_camera_target(scene, shot_col, root, settings, cam_obj)
-    if not auto_target and lookat_obj is not None:
-        # Respect user-provided look-at target: do not move it; use it as placement target.
-        target = lookat_obj.matrix_world.translation.copy()
     cam_obj.data.lens = lens if lens else shot_def["lens"]
     if DEBUG_CAM_RIG:
         print("use_circle_parent:", settings.use_camera_circle_parent)
@@ -882,7 +879,7 @@ def create_shot_camera(context, shot_id, index=0):
         if DEBUG_CAM_RIG:
             print("INSIDE_BBOX_CHECK:", inside)
 
-    if auto_target and lookat_obj is not None:
+    if lookat_obj is not None:
         lookat_mw = lookat_obj.matrix_world.copy()
         lookat_mw.translation = target
         lookat_obj.matrix_world = lookat_mw
@@ -1024,9 +1021,7 @@ def create_turntable(context):
     lock_camera_transforms(cam_obj, True)
 
     lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
-    if not auto_target and lookat_obj is not None:
-        target = lookat_obj.matrix_world.translation.copy()
-    if auto_target and lookat_obj is not None:
+    if lookat_obj is not None:
         lookat_mw = lookat_obj.matrix_world.copy()
         lookat_mw.translation = target
         lookat_obj.matrix_world = lookat_mw
