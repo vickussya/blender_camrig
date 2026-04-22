@@ -80,6 +80,30 @@ def get_selected_subjects(context):
     ]
 
 
+def _bounds_subjects(subjects):
+    # Production scenes often select an ARMATURE/EMPTY "asset root" while geometry lives in children.
+    # Use child geometry for bounds when available, otherwise fall back to the selected object itself.
+    bounds_sources = []
+    for ob in subjects or []:
+        if ob is None:
+            continue
+        if ob.type == "MESH":
+            bounds_sources.append(ob)
+            continue
+
+        child_meshes = []
+        for child in getattr(ob, "children_recursive", []) or []:
+            if child is None or child.get(TOOL_PROP):
+                continue
+            if child.type == "MESH":
+                child_meshes.append(child)
+        if child_meshes:
+            bounds_sources.extend(child_meshes)
+        else:
+            bounds_sources.append(ob)
+    return bounds_sources
+
+
 def get_primary_subject(context):
     active = context.view_layer.objects.active
     if active in context.selected_objects and active is not None and not active.get(TOOL_PROP):
@@ -811,11 +835,12 @@ def create_shot_camera(context, shot_id, index=0):
 
     rig_col = ensure_collection(scene)
     depsgraph = context.evaluated_depsgraph_get()
-    bounds = selection_world_bounds(subjects, depsgraph)
+    bounds_subjects = _bounds_subjects(subjects)
+    bounds = selection_world_bounds(bounds_subjects, depsgraph)
 
     camera_location, target, lens = compute_camera_transform(
         context,
-        subjects,
+        bounds_subjects,
         shot_id,
         settings.axis,
         settings.eye_level,
@@ -911,7 +936,7 @@ def ensure_rig_for_selection(context):
         return None, "Select at least one object."
 
     depsgraph = context.evaluated_depsgraph_get()
-    bounds = selection_world_bounds(subjects, depsgraph)
+    bounds = selection_world_bounds(_bounds_subjects(subjects), depsgraph)
     if bounds is None:
         return None, "Unable to compute bounds for selection."
 
@@ -932,13 +957,14 @@ def create_shot_set(context):
 
     settings = get_settings(context)
     subjects = get_selected_subjects(context)
+    bounds_subjects = _bounds_subjects(subjects)
     scene = context.scene
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
     for index, shot in enumerate(SHOT_DEFS):
         camera_location, target, lens = compute_camera_transform(
             context,
-            subjects,
+            bounds_subjects,
             shot["id"],
             settings.axis,
             settings.eye_level,
@@ -972,7 +998,8 @@ def create_turntable(context):
         return "Select a subject to turntable."
 
     depsgraph = context.evaluated_depsgraph_get()
-    bounds = selection_world_bounds(subjects, depsgraph)
+    bounds_subjects = _bounds_subjects(subjects)
+    bounds = selection_world_bounds(bounds_subjects, depsgraph)
     if bounds is None:
         return "Unable to compute bounds for turntable."
 
@@ -1007,7 +1034,7 @@ def create_turntable(context):
 
     camera_location, target, lens = compute_camera_transform(
         context,
-        subjects,
+        bounds_subjects,
         "TURNTABLE",
         settings.axis,
         settings.eye_level,
