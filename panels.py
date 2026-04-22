@@ -33,22 +33,6 @@ class CAMRIG_PT_setup(bpy.types.Panel):
         layout.prop(settings, "height_offset")
 
 
-class CAMRIG_PT_shot_types(bpy.types.Panel):
-    bl_label = "Shot Presets"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Cam Rig"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator("camrig.create_shot", text="Extreme Close-up").shot_id = "ECU"
-        layout.operator("camrig.create_shot", text="Closeup").shot_id = "CU"
-        layout.operator("camrig.create_shot", text="Medium").shot_id = "MED_WAIST"
-        layout.operator("camrig.create_shot", text="Medium Full").shot_id = "MED_FULL"
-        layout.operator("camrig.create_shot", text="Full").shot_id = "FULL"
-        layout.operator("camrig.create_shot", text="Wide").shot_id = "WIDE"
-
-
 class CAMRIG_PT_quick_switch(bpy.types.Panel):
     bl_label = "Switch Shot"
     bl_space_type = "VIEW_3D"
@@ -146,7 +130,6 @@ CLASSES = (
     CAMRIG_UL_shot_library,
     CAMRIG_UL_suggestions,
     CAMRIG_PT_setup,
-    CAMRIG_PT_shot_types,
     CAMRIG_PT_quick_switch,
     CAMRIG_PT_turntable,
     CAMRIG_PT_shot_library,
