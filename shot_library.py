@@ -142,13 +142,9 @@ def _apply_saved_shot_to_camera(context, cam_obj, item):
     if target_obj is None:
         target_obj, _ = get_or_create_camera_target(scene, shot_col, root, settings, cam_obj)
     if item.target_location and len(item.target_location) == 3:
-        mw = target_obj.matrix_world.copy()
-        mw.translation = Vector(item.target_location)
-        target_obj.matrix_world = mw
+        target_obj.location = Vector(item.target_location)
     if target_obj and getattr(item, "lookat_location", None) and len(item.lookat_location) == 3:
-        mw = target_obj.matrix_world.copy()
-        mw.translation = Vector(item.lookat_location)
-        target_obj.matrix_world = mw
+        target_obj.location = Vector(item.lookat_location)
     if target_obj and getattr(item, "lookat_rotation", None) and len(item.lookat_rotation) == 3:
         target_obj.rotation_euler = Euler(item.lookat_rotation, "XYZ")
     if target_obj and getattr(item, "lookat_scale", None) and len(item.lookat_scale) == 3:

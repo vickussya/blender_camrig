@@ -200,9 +200,6 @@ def ensure_track_to(cam_obj, target_obj, enabled):
     con.target = target_obj
     con.track_axis = "TRACK_NEGATIVE_Z"
     con.up_axis = "UP_Y"
-    # Be explicit: keep aiming stable regardless of parenting/collections.
-    con.owner_space = "WORLD"
-    con.target_space = "WORLD"
 
 
 def apply_tracking(root, subject, enabled):
@@ -887,9 +884,7 @@ def create_shot_camera(context, shot_id, index=0):
             print("INSIDE_BBOX_CHECK:", inside)
 
     if lookat_obj is not None:
-        lookat_mw = lookat_obj.matrix_world.copy()
-        lookat_mw.translation = target
-        lookat_obj.matrix_world = lookat_mw
+        lookat_obj.location = target
 
     return cam_obj, None
 
@@ -904,9 +899,7 @@ def switch_active_camera(context, shot_id):
         target_obj = bpy.data.objects.get(cam_obj[TARGET_OBJ_PROP])
         if target_obj:
             target = cam_obj[TARGET_PROP]
-            mw = target_obj.matrix_world.copy()
-            mw.translation = Vector((target[0], target[1], target[2]))
-            target_obj.matrix_world = mw
+            target_obj.location = Vector((target[0], target[1], target[2]))
     return True
 
 
@@ -1028,10 +1021,7 @@ def create_turntable(context):
     lock_camera_transforms(cam_obj, True)
 
     lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
-    if lookat_obj is not None:
-        lookat_mw = lookat_obj.matrix_world.copy()
-        lookat_mw.translation = target
-        lookat_obj.matrix_world = lookat_mw
+    lookat_obj.location = target
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
 
     base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
