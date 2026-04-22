@@ -825,7 +825,19 @@ def create_shot_camera(context, shot_id, index=0):
         return None, "Select at least one object."
     if DEBUG_CAM_RIG:
         print("Subjects:", [ob.name for ob in subjects])
+        active = context.view_layer.objects.active
+        print("Active:", active.name if active else None)
         print("Shot type:", shot_id, "Axis:", settings.axis)
+        print(
+            "Settings:",
+            {
+                "eye_level": settings.eye_level,
+                "tracking_enabled": settings.tracking_enabled,
+                "use_camera_circle_parent": settings.use_camera_circle_parent,
+                "look_at_target": settings.look_at_target.name if settings.look_at_target else None,
+                "height_offset": settings.height_offset,
+            },
+        )
 
     shot_def = get_shot_def(shot_id)
     if shot_def is None:
@@ -837,6 +849,20 @@ def create_shot_camera(context, shot_id, index=0):
     depsgraph = context.evaluated_depsgraph_get()
     bounds_subjects = _bounds_subjects(subjects)
     bounds = selection_world_bounds(bounds_subjects, depsgraph)
+    if DEBUG_CAM_RIG:
+        print("Bounds sources:", [ob.name for ob in bounds_subjects])
+        if bounds:
+            print(
+                "Bounds:",
+                {
+                    "min": tuple(bounds["min"]),
+                    "max": tuple(bounds["max"]),
+                    "center": tuple(bounds["center"]),
+                    "size": tuple(bounds["size"]),
+                    "height": bounds["height"],
+                    "max_dim": bounds["max_dim"],
+                },
+            )
 
     camera_location, target, lens = compute_camera_transform(
         context,
@@ -847,6 +873,9 @@ def create_shot_camera(context, shot_id, index=0):
     )
     if camera_location is None or target is None:
         return None, "Unable to compute camera placement."
+    if DEBUG_CAM_RIG:
+        print("Computed target:", tuple(target))
+        print("Computed camera_location:", tuple(camera_location))
 
     cam_obj = create_or_get_camera(scene, rig_col, desired_name, shot_id)
 
@@ -863,20 +892,34 @@ def create_shot_camera(context, shot_id, index=0):
         root = ensure_shot_root(scene, shot_col, shot_id, cam_obj.name)
     cam_obj[ROOT_OBJ_PROP] = root.name
     cam_obj[RIG_COLLECTION_PROP] = shot_col.name
+    if DEBUG_CAM_RIG:
+        print("Rig root:", root.name, "world:", tuple(root.matrix_world.translation))
 
     if bounds:
         root.location = bounds["center"]
     apply_tracking(root, get_primary_subject(context), settings.tracking_enabled)
+    if DEBUG_CAM_RIG:
+        print("Root after placement:", root.name, "world:", tuple(root.matrix_world.translation))
 
     lookat_obj, auto_target = get_or_create_camera_target(scene, shot_col, root, settings, cam_obj)
+    if DEBUG_CAM_RIG and lookat_obj is not None:
+        print("LookAt:", lookat_obj.name, "auto_target:", auto_target, "world(before):", tuple(lookat_obj.matrix_world.translation))
     cam_obj.data.lens = lens if lens else shot_def["lens"]
     if DEBUG_CAM_RIG:
         print("use_circle_parent:", settings.use_camera_circle_parent)
     axis_dir = axis_vector(settings.axis)
     distance = (camera_location - target).length
+    if DEBUG_CAM_RIG:
+        print("Axis dir:", tuple(axis_dir), "distance:", distance)
     place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
+    if DEBUG_CAM_RIG:
+        print("Camera world (before parenting):", tuple(cam_obj.matrix_world.translation), "parent:", cam_obj.parent.name if cam_obj.parent else None)
     apply_camera_parenting(scene, shot_col, root, cam_obj, settings)
+    if DEBUG_CAM_RIG:
+        print("Camera world (after parenting):", tuple(cam_obj.matrix_world.translation), "parent:", cam_obj.parent.name if cam_obj.parent else None)
     apply_orbit_controls(scene, shot_col, root, cam_obj, target, settings)
+    if DEBUG_CAM_RIG:
+        print("Camera world (after orbit):", tuple(cam_obj.matrix_world.translation), "parent:", cam_obj.parent.name if cam_obj.parent else None)
     if DEBUG_CAM_RIG:
         print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
         print("camera lens:", cam_obj.data.lens)
@@ -910,6 +953,8 @@ def create_shot_camera(context, shot_id, index=0):
 
     if lookat_obj is not None:
         lookat_obj.location = target
+        if DEBUG_CAM_RIG:
+            print("LookAt world(after):", tuple(lookat_obj.matrix_world.translation))
 
     return cam_obj, None
 
