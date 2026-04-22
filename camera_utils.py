@@ -73,12 +73,16 @@ def _find_tagged_object(obj_type, name=None, shot_id=None):
 
 
 def get_selected_subjects(context):
-    return [ob for ob in context.selected_objects if ob.type in {"MESH", "ARMATURE", "EMPTY"}]
+    return [
+        ob
+        for ob in context.selected_objects
+        if ob.type in {"MESH", "ARMATURE", "EMPTY"} and not ob.get(TOOL_PROP)
+    ]
 
 
 def get_primary_subject(context):
     active = context.view_layer.objects.active
-    if active in context.selected_objects:
+    if active in context.selected_objects and active is not None and not active.get(TOOL_PROP):
         return active
     subjects = get_selected_subjects(context)
     return subjects[0] if subjects else None
@@ -89,7 +93,7 @@ def get_dialogue_subjects(context):
     if len(subjects) < 2:
         return None, None
     active = context.view_layer.objects.active
-    if active in subjects:
+    if active in subjects and active is not None and not active.get(TOOL_PROP):
         a = active
         b = next((ob for ob in subjects if ob != a), None)
         return a, b
