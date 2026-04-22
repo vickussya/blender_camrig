@@ -23,7 +23,6 @@ class CAMRIG_PT_setup(bpy.types.Panel):
     def draw(self, context):
         settings = get_settings(context)
         layout = self.layout
-        layout.prop(settings, "camera_name")
         layout.operator("camrig.create_rig", icon="CAMERA_DATA")
         layout.prop(settings, "selected_shot")
         layout.prop(settings, "axis")
@@ -92,6 +91,12 @@ class CAMRIG_PT_shot_library(bpy.types.Panel):
         row.operator("camrig.shot_save", text="Save Shot")
         row.operator("camrig.shot_load", text="Load Shot")
         row.operator("camrig.shot_delete", text="Delete Shot")
+
+        item_row = layout.row()
+        item_row.enabled = bool(settings.shot_library) and 0 <= settings.shot_library_index < len(settings.shot_library)
+        if item_row.enabled:
+            item = settings.shot_library[settings.shot_library_index]
+            item_row.prop(item, "name", text="Name")
 
 
 class CAMRIG_PT_orbit_controls(bpy.types.Panel):

@@ -803,9 +803,7 @@ def create_shot_camera(context, shot_id, index=0):
     if shot_def is None:
         return None, "Unknown shot type."
 
-    desired_name = (settings.camera_name or "").strip()
-    if not desired_name:
-        desired_name = shot_def["name"]
+    desired_name = shot_def["name"]
 
     rig_col = ensure_collection(scene)
     depsgraph = context.evaluated_depsgraph_get()
