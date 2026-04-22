@@ -23,6 +23,7 @@ class CAMRIG_PT_setup(bpy.types.Panel):
     def draw(self, context):
         settings = get_settings(context)
         layout = self.layout
+        layout.prop(settings, "camera_name")
         layout.operator("camrig.create_rig", icon="CAMERA_DATA")
         layout.prop(settings, "selected_shot")
         layout.prop(settings, "axis")

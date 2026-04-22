@@ -10,6 +10,9 @@ TOOL_PROP = "cam_rig_tool"
 SHOT_PROP = "cam_rig_shot"
 TARGET_PROP = "cam_rig_target"
 SUBJECT_PROP = "cam_rig_subject"
+ROOT_OBJ_PROP = "cam_rig_root_obj"
+RIG_COLLECTION_PROP = "cam_rig_shot_collection"
+IS_ROOT_PROP = "cam_rig_is_root"
 
 COLLECTION_NAME = "CAM_RIG"
 ROOT_NAME = "CAM_RIG_ROOT"
@@ -99,6 +102,53 @@ def ensure_collection(scene, name=COLLECTION_NAME):
         col = bpy.data.collections.new(name)
         scene.collection.children.link(col)
     return col
+
+
+def ensure_shot_collection(scene, base_name):
+    rig_col = ensure_collection(scene)
+    col_name = f"{base_name}_Rig"
+    shot_col = bpy.data.collections.get(col_name)
+    if shot_col is None:
+        shot_col = bpy.data.collections.new(col_name)
+    if shot_col not in rig_col.children:
+        rig_col.children.link(shot_col)
+    return shot_col
+
+
+def get_rig_collection_for_camera(scene, cam_obj):
+    if cam_obj and cam_obj.get(RIG_COLLECTION_PROP):
+        col = bpy.data.collections.get(cam_obj.get(RIG_COLLECTION_PROP))
+        if col is not None:
+            return col
+    return ensure_collection(scene)
+
+
+def ensure_shot_root(scene, rig_col, shot_id, base_name):
+    root_name = f"{base_name}_Root"
+    root = bpy.data.objects.get(root_name)
+    if root is None or root.type != "EMPTY" or not root.get(TOOL_PROP) or not root.get(IS_ROOT_PROP):
+        root = bpy.data.objects.new(root_name, None)
+        root.empty_display_type = "PLAIN_AXES"
+        _tag_object(root)
+        root[IS_ROOT_PROP] = True
+        scene.collection.objects.link(root)
+    root[SHOT_PROP] = shot_id
+    if root.name not in rig_col.objects:
+        rig_col.objects.link(root)
+    return root
+
+
+def get_rig_root_for_camera(scene, cam_obj):
+    if cam_obj and cam_obj.get(ROOT_OBJ_PROP):
+        root = bpy.data.objects.get(cam_obj.get(ROOT_OBJ_PROP))
+        if root is not None and root.type == "EMPTY":
+            return root
+    parent = cam_obj.parent if cam_obj else None
+    while parent is not None:
+        if parent.type == "EMPTY" and parent.get(IS_ROOT_PROP):
+            return parent
+        parent = parent.parent
+    return None
 
 
 def ensure_root(scene, rig_col):
@@ -580,7 +630,10 @@ def move_orbit_left(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -597,7 +650,10 @@ def move_orbit_right(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -613,7 +669,10 @@ def raise_camera_orbit(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -629,7 +688,10 @@ def lower_camera_orbit(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -645,7 +707,10 @@ def move_orbit_closer(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -670,7 +735,10 @@ def move_orbit_farther(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -695,7 +763,10 @@ def start_auto_orbit(context):
     empty = _orbit_control_empty_for_camera(cam_obj)
     if empty is None:
         target = _orbit_target_location(context, None)
-        ensure_circle_orbit_control(context.scene, ensure_collection(context.scene), ensure_root(context.scene, ensure_collection(context.scene)), cam_obj, target, settings)
+        scene = context.scene
+        rig_col = get_rig_collection_for_camera(scene, cam_obj)
+        rig_root = get_rig_root_for_camera(scene, cam_obj) or ensure_root(scene, rig_col)
+        ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target, settings)
         empty = _orbit_control_empty_for_camera(cam_obj)
         if empty is None:
             return "Circle control not found."
@@ -728,12 +799,13 @@ def create_shot_camera(context, shot_id, index=0):
     if shot_def is None:
         return None, "Unknown shot type."
 
+    desired_name = (settings.camera_name or "").strip()
+    if not desired_name:
+        desired_name = shot_def["name"]
+
     rig_col = ensure_collection(scene)
-    root = ensure_root(scene, rig_col)
     depsgraph = context.evaluated_depsgraph_get()
     bounds = selection_world_bounds(subjects, depsgraph)
-    if bounds:
-        root.location = bounds["center"]
 
     camera_location, target, lens = compute_camera_transform(
         context,
@@ -745,16 +817,28 @@ def create_shot_camera(context, shot_id, index=0):
     if camera_location is None or target is None:
         return None, "Unable to compute camera placement."
 
-    cam_obj = create_or_get_camera(scene, rig_col, shot_def["name"], shot_id)
-    lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
+    cam_obj = create_or_get_camera(scene, rig_col, desired_name, shot_id)
+    shot_col = ensure_shot_collection(scene, cam_obj.name)
+    if cam_obj.name not in shot_col.objects:
+        shot_col.objects.link(cam_obj)
+
+    root = ensure_shot_root(scene, shot_col, shot_id, cam_obj.name)
+    cam_obj[ROOT_OBJ_PROP] = root.name
+    cam_obj[RIG_COLLECTION_PROP] = shot_col.name
+
+    if bounds:
+        root.location = bounds["center"]
+    apply_tracking(root, get_primary_subject(context), settings.tracking_enabled)
+
+    lookat_obj, auto_target = get_or_create_camera_target(scene, shot_col, root, settings, cam_obj)
     cam_obj.data.lens = lens if lens else shot_def["lens"]
     if DEBUG_CAM_RIG:
         print("use_circle_parent:", settings.use_camera_circle_parent)
     axis_dir = axis_vector(settings.axis)
     distance = (camera_location - target).length
     place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
-    apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
-    apply_orbit_controls(scene, rig_col, root, cam_obj, target, settings)
+    apply_camera_parenting(scene, shot_col, root, cam_obj, settings)
+    apply_orbit_controls(scene, shot_col, root, cam_obj, target, settings)
     if DEBUG_CAM_RIG:
         print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
         print("camera lens:", cam_obj.data.lens)

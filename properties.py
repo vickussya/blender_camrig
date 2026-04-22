@@ -16,6 +16,33 @@ class CAMRIG_ShotLibraryItem(bpy.types.PropertyGroup):
     eye_level: bpy.props.BoolProperty(name="Eye Level")
     tracking_enabled: bpy.props.BoolProperty(name="Tracking")
 
+    # Extended rig restore (v2): independent rig objects + animation data.
+    library_version: bpy.props.IntProperty(name="Library Version", default=2)
+    use_camera_circle_parent: bpy.props.BoolProperty(name="Use Camera Circle Parent", default=False)
+
+    rig_collection_name: bpy.props.StringProperty(name="Rig Collection")
+    root_name: bpy.props.StringProperty(name="Root")
+    root_location: bpy.props.FloatVectorProperty(name="Root Location", size=3, subtype="TRANSLATION")
+    root_rotation: bpy.props.FloatVectorProperty(name="Root Rotation", size=3, subtype="EULER")
+    root_scale: bpy.props.FloatVectorProperty(name="Root Scale", size=3, subtype="XYZ", default=(1.0, 1.0, 1.0))
+
+    lookat_name: bpy.props.StringProperty(name="LookAt")
+    lookat_location: bpy.props.FloatVectorProperty(name="LookAt Location", size=3, subtype="TRANSLATION")
+    lookat_rotation: bpy.props.FloatVectorProperty(name="LookAt Rotation", size=3, subtype="EULER")
+    lookat_scale: bpy.props.FloatVectorProperty(name="LookAt Scale", size=3, subtype="XYZ", default=(1.0, 1.0, 1.0))
+
+    control_name: bpy.props.StringProperty(name="Control")
+    control_location: bpy.props.FloatVectorProperty(name="Control Location", size=3, subtype="TRANSLATION")
+    control_rotation: bpy.props.FloatVectorProperty(name="Control Rotation", size=3, subtype="EULER")
+    control_scale: bpy.props.FloatVectorProperty(name="Control Scale", size=3, subtype="XYZ", default=(1.0, 1.0, 1.0))
+
+    camera_action: bpy.props.StringProperty(name="Camera Action")
+    camera_data_action: bpy.props.StringProperty(name="Camera Data Action")
+    root_action: bpy.props.StringProperty(name="Root Action")
+    lookat_action: bpy.props.StringProperty(name="LookAt Action")
+    control_action: bpy.props.StringProperty(name="Control Action")
+    control_driver_expression: bpy.props.StringProperty(name="Control Driver Expression")
+
 
 class CAMRIG_SuggestionItem(bpy.types.PropertyGroup):
     shot_id: bpy.props.StringProperty(name="Shot ID")
@@ -24,6 +51,11 @@ class CAMRIG_SuggestionItem(bpy.types.PropertyGroup):
 
 
 class CAMRIG_Settings(bpy.types.PropertyGroup):
+    camera_name: bpy.props.StringProperty(
+        name="Camera Name",
+        description="Optional custom name for newly created shot cameras (leave empty to use defaults)",
+        default="",
+    )
     axis: bpy.props.EnumProperty(
         name="Axis",
         items=AXIS_ITEMS,
