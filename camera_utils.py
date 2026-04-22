@@ -215,6 +215,14 @@ def parent_keep_world(obj, parent):
     obj.matrix_world = mw
 
 
+def set_world_location(obj, location):
+    if obj is None or location is None:
+        return
+    mw = obj.matrix_world.copy()
+    mw.translation = location
+    obj.matrix_world = mw
+
+
 def ensure_track_to(cam_obj, target_obj, enabled):
     for con in [c for c in cam_obj.constraints if c.type in {"TRACK_TO", "DAMPED_TRACK"}]:
         cam_obj.constraints.remove(con)
@@ -561,7 +569,7 @@ def ensure_circle_orbit_control(scene, rig_col, rig_root, cam_obj, target_locati
     empty["cam_rig_orbit_target"] = (target_location.x, target_location.y, target_location.z)
 
     # Place empty at orbit center and camera on the circle circumference.
-    empty.location = target_location
+    set_world_location(empty, target_location)
     if rig_root:
         parent_keep_world(empty, rig_root)
 
@@ -896,7 +904,7 @@ def create_shot_camera(context, shot_id, index=0):
         print("Rig root:", root.name, "world:", tuple(root.matrix_world.translation))
 
     if bounds:
-        root.location = bounds["center"]
+        set_world_location(root, bounds["center"])
     apply_tracking(root, get_primary_subject(context), settings.tracking_enabled)
     if DEBUG_CAM_RIG:
         print("Root after placement:", root.name, "world:", tuple(root.matrix_world.translation))
@@ -904,11 +912,22 @@ def create_shot_camera(context, shot_id, index=0):
     lookat_obj, auto_target = get_or_create_camera_target(scene, shot_col, root, settings, cam_obj)
     if DEBUG_CAM_RIG and lookat_obj is not None:
         print("LookAt:", lookat_obj.name, "auto_target:", auto_target, "world(before):", tuple(lookat_obj.matrix_world.translation))
+
+    computed_target = target
+    computed_camera_location = camera_location
+    if not auto_target and lookat_obj is not None:
+        # Respect user-provided look-at target: do not move it; instead use it as the placement target.
+        target = lookat_obj.matrix_world.translation.copy()
+    elif lookat_obj is not None:
+        # Auto-created target is placed in world space at the computed target position.
+        set_world_location(lookat_obj, target)
+    if DEBUG_CAM_RIG:
+        print("Placement target(world):", tuple(target), "auto_target:", auto_target)
     cam_obj.data.lens = lens if lens else shot_def["lens"]
     if DEBUG_CAM_RIG:
         print("use_circle_parent:", settings.use_camera_circle_parent)
     axis_dir = axis_vector(settings.axis)
-    distance = (camera_location - target).length
+    distance = (computed_camera_location - computed_target).length
     if DEBUG_CAM_RIG:
         print("Axis dir:", tuple(axis_dir), "distance:", distance)
     place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
@@ -951,11 +970,6 @@ def create_shot_camera(context, shot_id, index=0):
         if DEBUG_CAM_RIG:
             print("INSIDE_BBOX_CHECK:", inside)
 
-    if lookat_obj is not None:
-        lookat_obj.location = target
-        if DEBUG_CAM_RIG:
-            print("LookAt world(after):", tuple(lookat_obj.matrix_world.translation))
-
     return cam_obj, None
 
 
@@ -969,7 +983,7 @@ def switch_active_camera(context, shot_id):
         target_obj = bpy.data.objects.get(cam_obj[TARGET_OBJ_PROP])
         if target_obj:
             target = cam_obj[TARGET_PROP]
-            target_obj.location = Vector((target[0], target[1], target[2]))
+            set_world_location(target_obj, Vector((target[0], target[1], target[2])))
     return True
 
 
@@ -988,7 +1002,7 @@ def ensure_rig_for_selection(context):
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
 
-    root.location = bounds["center"]
+    set_world_location(root, bounds["center"])
     subject = get_primary_subject(context)
     apply_tracking(root, subject, settings.tracking_enabled)
 
@@ -1018,11 +1032,17 @@ def create_shot_set(context):
             continue
         cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
         lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
+        computed_target = target
+        computed_camera_location = camera_location
+        if not auto_target and lookat_obj is not None:
+            target = lookat_obj.matrix_world.translation.copy()
+        elif lookat_obj is not None:
+            set_world_location(lookat_obj, target)
         cam_obj.data.lens = lens if lens else shot["lens"]
         if DEBUG_CAM_RIG:
             print("use_circle_parent:", settings.use_camera_circle_parent)
         axis_dir = axis_vector(settings.axis)
-        distance = (camera_location - target).length
+        distance = (computed_camera_location - computed_target).length
         place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
         apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
         apply_orbit_controls(scene, rig_col, root, cam_obj, target, settings)
@@ -1050,7 +1070,7 @@ def create_turntable(context):
 
     rig_col = ensure_collection(scene)
     root = ensure_root(scene, rig_col)
-    root.location = bounds["center"]
+    set_world_location(root, bounds["center"])
     apply_tracking(root, get_primary_subject(context), settings.tracking_enabled)
 
     start = scene.frame_start
@@ -1064,7 +1084,7 @@ def create_turntable(context):
         scene.collection.objects.link(pivot)
     if pivot.name not in rig_col.objects:
         rig_col.objects.link(pivot)
-    pivot.location = bounds["center"]
+    set_world_location(pivot, bounds["center"])
     parent_keep_world(pivot, root)
 
     cam_obj = _find_tagged_object("CAMERA", shot_id="TURNTABLE")
@@ -1086,14 +1106,22 @@ def create_turntable(context):
     )
     if camera_location is None or target is None:
         return "Unable to compute camera placement."
-    cam_obj.location = camera_location
+
+    lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
+    computed_target = target
+    computed_camera_location = camera_location
+    if not auto_target and lookat_obj is not None:
+        target = lookat_obj.matrix_world.translation.copy()
+    elif lookat_obj is not None:
+        set_world_location(lookat_obj, target)
+
+    axis_dir = axis_vector(settings.axis)
+    distance = (computed_camera_location - computed_target).length
+    set_world_location(cam_obj, target + axis_dir * distance)
     if lens:
         cam_obj.data.lens = lens
     apply_camera_parenting(scene, rig_col, pivot, cam_obj, settings)
     lock_camera_transforms(cam_obj, True)
-
-    lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
-    lookat_obj.location = target
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
 
     base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
