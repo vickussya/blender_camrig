@@ -200,6 +200,9 @@ def ensure_track_to(cam_obj, target_obj, enabled):
     con.target = target_obj
     con.track_axis = "TRACK_NEGATIVE_Z"
     con.up_axis = "UP_Y"
+    # Be explicit: keep aiming stable regardless of parenting/collections.
+    con.owner_space = "WORLD"
+    con.target_space = "WORLD"
 
 
 def apply_tracking(root, subject, enabled):
