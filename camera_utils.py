@@ -820,11 +820,18 @@ def create_shot_camera(context, shot_id, index=0):
         return None, "Unable to compute camera placement."
 
     cam_obj = create_or_get_camera(scene, rig_col, desired_name, shot_id)
-    shot_col = ensure_shot_collection(scene, cam_obj.name)
+
+    shot_col = None
+    if cam_obj.get(RIG_COLLECTION_PROP):
+        shot_col = bpy.data.collections.get(cam_obj.get(RIG_COLLECTION_PROP))
+    if shot_col is None:
+        shot_col = ensure_shot_collection(scene, cam_obj.name)
     if cam_obj.name not in shot_col.objects:
         shot_col.objects.link(cam_obj)
 
-    root = ensure_shot_root(scene, shot_col, shot_id, cam_obj.name)
+    root = get_rig_root_for_camera(scene, cam_obj)
+    if root is None:
+        root = ensure_shot_root(scene, shot_col, shot_id, cam_obj.name)
     cam_obj[ROOT_OBJ_PROP] = root.name
     cam_obj[RIG_COLLECTION_PROP] = shot_col.name
 

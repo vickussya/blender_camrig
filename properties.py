@@ -3,8 +3,51 @@ import bpy
 from .camera_utils import AXIS_ITEMS, SHOT_ENUM_ITEMS, TURNTABLE_TYPES
 
 
+def _camrig_update_shot_library_name(self, context):
+    # Sync Shot Library item name -> camera object name (user-facing rename).
+    if getattr(self, "get", None) and self.get("_camrig_renaming"):
+        return
+    if context is None or getattr(context, "screen", None) is None:
+        return
+
+    cam_name = (getattr(self, "camera_name", "") or "").strip()
+    if not cam_name:
+        return
+    cam_obj = bpy.data.objects.get(cam_name)
+    if cam_obj is None or cam_obj.type != "CAMERA":
+        return
+
+    desired = (getattr(self, "name", "") or "").strip()
+    if not desired:
+        if getattr(self, "get", None) is None:
+            return
+        self["_camrig_renaming"] = True
+        try:
+            self.name = cam_obj.name
+            self.camera_name = cam_obj.name
+        finally:
+            if "_camrig_renaming" in self:
+                del self["_camrig_renaming"]
+        return
+
+    if cam_obj.name == desired and self.camera_name == cam_obj.name:
+        return
+
+    if getattr(self, "get", None) is None:
+        return
+    self["_camrig_renaming"] = True
+    try:
+        cam_obj.name = desired
+        final_name = cam_obj.name
+        self.camera_name = final_name
+        self.name = final_name
+    finally:
+        if "_camrig_renaming" in self:
+            del self["_camrig_renaming"]
+
+
 class CAMRIG_ShotLibraryItem(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(name="Name")
+    name: bpy.props.StringProperty(name="Name", update=_camrig_update_shot_library_name)
     shot_id: bpy.props.EnumProperty(name="Shot Type", items=SHOT_ENUM_ITEMS)
     camera_name: bpy.props.StringProperty(name="Camera")
     location: bpy.props.FloatVectorProperty(name="Location", size=3, subtype="TRANSLATION")

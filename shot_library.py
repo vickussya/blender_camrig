@@ -95,8 +95,14 @@ def _apply_saved_shot_to_camera(context, cam_obj, item):
     scene = context.scene
     rig_col = ensure_collection(scene)
 
-    # Prefer per-shot container when available; fall back to legacy root behavior.
-    shot_col = ensure_shot_collection(scene, cam_obj.name)
+    # Prefer stored per-shot container when available; fall back to name-based creation.
+    shot_col = None
+    if cam_obj.get(RIG_COLLECTION_PROP):
+        shot_col = bpy.data.collections.get(cam_obj.get(RIG_COLLECTION_PROP))
+    if shot_col is None and getattr(item, "rig_collection_name", ""):
+        shot_col = bpy.data.collections.get(item.rig_collection_name)
+    if shot_col is None:
+        shot_col = ensure_shot_collection(scene, cam_obj.name)
     if cam_obj.name not in shot_col.objects:
         shot_col.objects.link(cam_obj)
     cam_obj[RIG_COLLECTION_PROP] = shot_col.name
