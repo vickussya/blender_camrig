@@ -110,7 +110,8 @@ def ensure_shot_collection(scene, base_name):
     shot_col = bpy.data.collections.get(col_name)
     if shot_col is None:
         shot_col = bpy.data.collections.new(col_name)
-    if shot_col not in rig_col.children:
+    # bpy_prop_collection membership expects names (strings), not collection objects.
+    if rig_col.children.get(shot_col.name) is None:
         rig_col.children.link(shot_col)
     return shot_col
 
@@ -434,7 +435,10 @@ def create_or_get_camera(scene, rig_col, name, shot_id):
 
 
 def place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, tracking_enabled):
-    cam_obj.location = target + axis_dir * distance
+    # Set world-space placement defensively (camera may already be parented).
+    cam_world = cam_obj.matrix_world.copy()
+    cam_world.translation = target + axis_dir * distance
+    cam_obj.matrix_world = cam_world
     if lookat_obj:
         ensure_track_to(cam_obj, lookat_obj, tracking_enabled)
         cam_obj[TARGET_OBJ_PROP] = lookat_obj.name
