@@ -840,6 +840,9 @@ def create_shot_camera(context, shot_id, index=0):
     apply_tracking(root, get_primary_subject(context), settings.tracking_enabled)
 
     lookat_obj, auto_target = get_or_create_camera_target(scene, shot_col, root, settings, cam_obj)
+    if not auto_target and lookat_obj is not None:
+        # Respect user-provided look-at target: do not move it; use it as placement target.
+        target = lookat_obj.matrix_world.translation.copy()
     cam_obj.data.lens = lens if lens else shot_def["lens"]
     if DEBUG_CAM_RIG:
         print("use_circle_parent:", settings.use_camera_circle_parent)
@@ -879,7 +882,10 @@ def create_shot_camera(context, shot_id, index=0):
         if DEBUG_CAM_RIG:
             print("INSIDE_BBOX_CHECK:", inside)
 
-    lookat_obj.location = target
+    if auto_target and lookat_obj is not None:
+        lookat_mw = lookat_obj.matrix_world.copy()
+        lookat_mw.translation = target
+        lookat_obj.matrix_world = lookat_mw
 
     return cam_obj, None
 
@@ -894,7 +900,9 @@ def switch_active_camera(context, shot_id):
         target_obj = bpy.data.objects.get(cam_obj[TARGET_OBJ_PROP])
         if target_obj:
             target = cam_obj[TARGET_PROP]
-            target_obj.location = Vector((target[0], target[1], target[2]))
+            mw = target_obj.matrix_world.copy()
+            mw.translation = Vector((target[0], target[1], target[2]))
+            target_obj.matrix_world = mw
     return True
 
 
@@ -1016,7 +1024,12 @@ def create_turntable(context):
     lock_camera_transforms(cam_obj, True)
 
     lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
-    lookat_obj.location = target
+    if not auto_target and lookat_obj is not None:
+        target = lookat_obj.matrix_world.translation.copy()
+    if auto_target and lookat_obj is not None:
+        lookat_mw = lookat_obj.matrix_world.copy()
+        lookat_mw.translation = target
+        lookat_obj.matrix_world = lookat_mw
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
 
     base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
