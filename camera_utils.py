@@ -50,6 +50,23 @@ TURNTABLE_TYPES = [
     ("ROTATE_CAMERA", "Rotate Camera Around Subject", "Spin camera around subject"),
 ]
 
+SHOT_OFFSET_MULTIPLIERS = {
+    "ECU": 1.0,
+    "CU": 1.5,
+    "MED_WAIST": 2.5,
+    "MED_FULL": 3.5,
+    "FULL": 5.0,
+    "WIDE": 7.5,
+    "OTS_A": 2.5,
+    "OTS_B": 2.5,
+    "SINGLE_A": 2.5,
+    "SINGLE_B": 2.5,
+    "TWO_SHOT": 4.0,
+    "TURNTABLE": 4.0,
+}
+
+_DEG_TO_RAD = math.radians(1)
+
 
 def get_settings(context):
     return context.scene.camrig_settings
@@ -320,6 +337,10 @@ def compute_target_height(bounds, shot_type, eye_level):
         "MED_FULL": min_z + height * 0.66,
         "FULL": min_z + height * 0.52,
         "WIDE": min_z + height * 0.50,
+        "OTS_A": min_z + height * 0.84,
+        "OTS_B": min_z + height * 0.84,
+        "SINGLE_A": min_z + height * 0.84,
+        "SINGLE_B": min_z + height * 0.84,
     }.get(shot_type, min_z + height * 0.68)
 
     if not eye_level:
@@ -335,6 +356,10 @@ def compute_target_height(bounds, shot_type, eye_level):
         "MED_FULL": 0.5,
         "FULL": 0.2,
         "WIDE": 0.1,
+        "OTS_A": 0.9,
+        "OTS_B": 0.9,
+        "SINGLE_A": 0.9,
+        "SINGLE_B": 0.9,
     }
     weight = weights.get(shot_type, 0.5)
     if upright:
@@ -378,15 +403,7 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
     depth = bounds["size"].y
     height = bounds["height"]
     base = max(width, depth, height, 0.1)
-    multipliers = {
-        "ECU": 1.0,
-        "CU": 1.5,
-        "MED_WAIST": 2.5,
-        "MED_FULL": 3.5,
-        "FULL": 5.0,
-        "WIDE": 7.5,
-    }
-    shot_offset = max(base * multipliers.get(shot_type, 2.5), base * 1.0)
+    shot_offset = max(base * SHOT_OFFSET_MULTIPLIERS.get(shot_type, 2.5), base * 1.0)
     margin = max(base * 0.1, 0.05)
     half_extent = {
         "+X": width * 0.5,
@@ -438,6 +455,10 @@ def compute_camera_transform(context, subject, shot_type, axis, eye_level):
         "MED_FULL": 40.0,
         "FULL": 35.0,
         "WIDE": 24.0,
+        "OTS_A": 50.0,
+        "OTS_B": 50.0,
+        "SINGLE_A": 70.0,
+        "SINGLE_B": 70.0,
     }
 
     if DEBUG_CAM_RIG:
@@ -486,47 +507,6 @@ def get_control_empty_name(camera_name):
         return camera_name.replace("CAM_", "CTRL_CAM_", 1)
     return f"CTRL_{camera_name}"
 
-
-def ensure_camera_control_empty(camera_obj, rig_root, rig_col, enabled, name_override=None):
-    if not enabled:
-        return None
-
-    name = name_override or get_control_empty_name(camera_obj.name)
-    empty = _find_tagged_object("EMPTY", name=name)
-    if empty is not None and empty.get("cam_rig_camera") != camera_obj.name:
-        empty.name = f"{name}_OLD"
-        empty = None
-    if empty is None:
-        empty = bpy.data.objects.new(name, None)
-        empty.empty_display_type = "CIRCLE"
-        empty.empty_display_size = 1.5
-        empty.hide_viewport = False
-        empty.hide_render = True
-        empty.hide_set(False)
-        _tag_object(empty)
-        rig_col.objects.link(empty)
-    if empty.name not in rig_col.objects:
-        rig_col.objects.link(empty)
-
-    cam_world = camera_obj.matrix_world.copy()
-    empty.matrix_world = cam_world
-    empty["cam_rig_camera"] = camera_obj.name
-
-    if rig_root:
-        parent_keep_world(empty, rig_root)
-
-    camera_obj.parent = empty
-    camera_obj.matrix_parent_inverse = empty.matrix_world.inverted()
-    camera_obj.matrix_world = cam_world
-
-    if DEBUG_CAM_RIG:
-        print("use_circle_parent:", enabled)
-        print("control empty:", empty.name)
-        print("control empty linked:", empty.name in rig_col.objects)
-        print("camera parent:", camera_obj.parent.name if camera_obj.parent else None)
-        print("camera world:", camera_obj.matrix_world.translation)
-        print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
-    return empty
 
 
 def apply_camera_parenting(scene, rig_col, parent_obj, camera_obj, settings):
@@ -811,7 +791,7 @@ def start_auto_orbit(context):
         if empty is None:
             return "Circle control not found."
     fcurve = empty.driver_add("rotation_euler", 2)
-    fcurve.driver.expression = f"frame*{speed}*0.0174533"
+    fcurve.driver.expression = f"frame*{speed}*{_DEG_TO_RAD}"
     return None
 
 
@@ -948,7 +928,7 @@ def create_shot_camera(context, shot_id, index=0):
         if DEBUG_CAM_RIG:
             print("Initial camera world:", cam_world)
         base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
-        shot_offset = max(base * {"ECU": 1.0, "CU": 1.5, "MED_WAIST": 2.5, "MED_FULL": 3.5, "FULL": 5.0, "WIDE": 7.5, "OTS_A": 2.5, "OTS_B": 2.5, "SINGLE_A": 2.5, "SINGLE_B": 2.5, "TWO_SHOT": 4.0, "TURNTABLE": 4.0}.get(shot_id, 2.5), base * 1.0)
+        shot_offset = max(base * SHOT_OFFSET_MULTIPLIERS.get(shot_id, 2.5), base * 1.0)
         margin = max(base * 0.1, 0.05)
         corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
         if DEBUG_CAM_RIG:
@@ -986,73 +966,6 @@ def switch_active_camera(context, shot_id):
             set_world_location(target_obj, Vector((target[0], target[1], target[2])))
     return True
 
-
-def ensure_rig_for_selection(context):
-    settings = get_settings(context)
-    scene = context.scene
-    subjects = get_selected_subjects(context)
-    if not subjects:
-        return None, "Select at least one object."
-
-    depsgraph = context.evaluated_depsgraph_get()
-    bounds = selection_world_bounds(_bounds_subjects(subjects), depsgraph)
-    if bounds is None:
-        return None, "Unable to compute bounds for selection."
-
-    rig_col = ensure_collection(scene)
-    root = ensure_root(scene, rig_col)
-
-    set_world_location(root, bounds["center"])
-    subject = get_primary_subject(context)
-    apply_tracking(root, subject, settings.tracking_enabled)
-
-    return bounds, None
-
-
-def create_shot_set(context):
-    bounds, err = ensure_rig_for_selection(context)
-    if err:
-        return err
-
-    settings = get_settings(context)
-    subjects = get_selected_subjects(context)
-    bounds_subjects = _bounds_subjects(subjects)
-    scene = context.scene
-    rig_col = ensure_collection(scene)
-    root = ensure_root(scene, rig_col)
-    for index, shot in enumerate(SHOT_DEFS):
-        camera_location, target, lens = compute_camera_transform(
-            context,
-            bounds_subjects,
-            shot["id"],
-            settings.axis,
-            settings.eye_level,
-        )
-        if camera_location is None or target is None:
-            continue
-        cam_obj = create_or_get_camera(scene, rig_col, shot["name"], shot["id"])
-        lookat_obj, auto_target = get_or_create_camera_target(scene, rig_col, root, settings, cam_obj)
-        computed_target = target
-        computed_camera_location = camera_location
-        if not auto_target and lookat_obj is not None:
-            target = lookat_obj.matrix_world.translation.copy()
-        elif lookat_obj is not None:
-            set_world_location(lookat_obj, target)
-        cam_obj.data.lens = lens if lens else shot["lens"]
-        if DEBUG_CAM_RIG:
-            print("use_circle_parent:", settings.use_camera_circle_parent)
-        axis_dir = axis_vector(settings.axis)
-        distance = (computed_camera_location - computed_target).length
-        place_shot_camera(cam_obj, lookat_obj, target, axis_dir, distance, settings.tracking_enabled)
-        apply_camera_parenting(scene, rig_col, root, cam_obj, settings)
-        apply_orbit_controls(scene, rig_col, root, cam_obj, target, settings)
-        if DEBUG_CAM_RIG:
-            print("camera parent:", cam_obj.parent.name if cam_obj.parent else None)
-            print("camera lens:", cam_obj.data.lens)
-            print("ctrl cams:", [ob.name for ob in bpy.data.objects if ob.name.startswith("CTRL_CAM")])
-
-    scene.camera = _find_tagged_object("CAMERA", shot_id="MED_FULL") or scene.camera
-    return None
 
 
 def create_turntable(context):
@@ -1125,7 +1038,7 @@ def create_turntable(context):
     ensure_track_to(cam_obj, lookat_obj, settings.tracking_enabled)
 
     base = max(bounds["size"].x, bounds["size"].y, bounds["height"], 0.1)
-    shot_offset = max(base * 4.0, base * 1.0)
+    shot_offset = max(base * SHOT_OFFSET_MULTIPLIERS["TURNTABLE"], base * 1.0)
     margin = max(base * 0.1, 0.05)
     corrected, final_world = enforce_final_camera_outside_bounds(cam_obj, bounds, settings.axis, shot_offset, margin)
     if DEBUG_CAM_RIG:

@@ -12,11 +12,12 @@ import importlib
 
 import bpy
 
-from . import camera_utils, operators, panels, properties, shot_library
+from . import camera_utils, dialogue, operators, panels, properties, shot_library
 
 
 if "bpy" in locals():
     importlib.reload(camera_utils)
+    importlib.reload(dialogue)
     importlib.reload(shot_library)
     importlib.reload(properties)
     importlib.reload(operators)

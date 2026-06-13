@@ -33,6 +33,20 @@ class CAMRIG_PT_setup(bpy.types.Panel):
         layout.prop(settings, "height_offset")
 
 
+class CAMRIG_PT_dialogue(bpy.types.Panel):
+    bl_label = "Dialogue Setup"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Cam Rig"
+    bl_parent_id = "CAMRIG_PT_setup"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Select two characters, then:", icon="INFO")
+        layout.operator("camrig.dialogue_create", icon="CAMERA_DATA")
+
+
 class CAMRIG_PT_quick_switch(bpy.types.Panel):
     bl_label = "Switch Shot"
     bl_space_type = "VIEW_3D"
@@ -130,6 +144,7 @@ CLASSES = (
     CAMRIG_UL_shot_library,
     CAMRIG_UL_suggestions,
     CAMRIG_PT_setup,
+    CAMRIG_PT_dialogue,
     CAMRIG_PT_quick_switch,
     CAMRIG_PT_turntable,
     CAMRIG_PT_shot_library,

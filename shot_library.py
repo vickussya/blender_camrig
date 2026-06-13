@@ -191,17 +191,36 @@ def _apply_saved_shot_to_camera(context, cam_obj, item):
         _assign_action(control_obj, getattr(item, "control_action", ""))
 
 
-def save_shot(context):
+def save_shot(context, name):
     settings = get_settings(context)
     cam_obj = context.scene.camera
     if cam_obj is None:
         return "No active camera to save."
     if cam_obj.get(SHOT_PROP) == "TURNTABLE":
         return "Turntable shots cannot be saved in Shot Library."
+
+    scene = context.scene
+
+    # Create a new owned camera object so each library entry is independent.
+    new_cam_data = bpy.data.cameras.new(name=name)
+    new_cam_data.lens = cam_obj.data.lens
+    new_cam_data.clip_start = cam_obj.data.clip_start
+    new_cam_data.clip_end = cam_obj.data.clip_end
+    new_cam_data.sensor_width = cam_obj.data.sensor_width
+    new_cam_obj = bpy.data.objects.new(name=name, object_data=new_cam_data)
+    new_cam_obj[SHOT_PROP] = cam_obj.get(SHOT_PROP, "")
+    new_cam_obj[TOOL_PROP] = True
+    new_cam_obj.matrix_world = cam_obj.matrix_world.copy()
+    scene.collection.objects.link(new_cam_obj)
+
+    rig_col = get_rig_collection_for_camera(scene, cam_obj)
+    if rig_col and new_cam_obj.name not in rig_col.objects:
+        rig_col.objects.link(new_cam_obj)
+
     item = settings.shot_library.add()
-    item.name = cam_obj.name
-    item.shot_id = cam_obj.get(SHOT_PROP, "MED_FULL")
-    item.camera_name = cam_obj.name
+    item.name = new_cam_obj.name  # actual name (Blender may append .001 on collision)
+    item.shot_id = cam_obj.get(SHOT_PROP, "")
+    item.camera_name = new_cam_obj.name
     item.location = cam_obj.matrix_world.translation
     item.rotation = cam_obj.matrix_world.to_euler()
     item.lens = cam_obj.data.lens
@@ -210,20 +229,14 @@ def save_shot(context):
         target = cam_obj[TARGET_PROP]
         item.target_location = (target[0], target[1], target[2])
     elif item.target_name and bpy.data.objects.get(item.target_name):
-        target_obj = bpy.data.objects.get(item.target_name)
-        item.target_location = target_obj.location
+        target_obj_tmp = bpy.data.objects.get(item.target_name)
+        item.target_location = target_obj_tmp.location
     item.axis = settings.axis
     item.eye_level = settings.eye_level
     item.tracking_enabled = settings.tracking_enabled
-    if hasattr(item, "use_camera_circle_parent"):
-        item.use_camera_circle_parent = settings.use_camera_circle_parent
+    item.use_camera_circle_parent = settings.use_camera_circle_parent
+    item.rig_collection_name = rig_col.name if rig_col else ""
 
-    scene = context.scene
-    rig_col = get_rig_collection_for_camera(scene, cam_obj)
-    if hasattr(item, "rig_collection_name"):
-        item.rig_collection_name = rig_col.name if rig_col else ""
-
-    # Store rig object references and transforms (best-effort, backward-safe).
     root = _best_rig_root_for_camera(cam_obj)
     if root:
         item.root_name = root.name
@@ -251,17 +264,15 @@ def save_shot(context):
         item.control_location = control_obj.location
         item.control_rotation = control_obj.rotation_euler
         item.control_scale = control_obj.scale
-        if hasattr(item, "control_driver_expression"):
-            expr = ""
-            if control_obj.animation_data:
-                for drv in control_obj.animation_data.drivers:
-                    if drv.data_path == "rotation_euler" and drv.array_index == 2:
-                        expr = drv.driver.expression
-                        break
-            item.control_driver_expression = expr
+        expr = ""
+        if control_obj.animation_data:
+            for drv in control_obj.animation_data.drivers:
+                if drv.data_path == "rotation_euler" and drv.array_index == 2:
+                    expr = drv.driver.expression
+                    break
+        item.control_driver_expression = expr
 
-    # Copy and store animation actions for reliable restore.
-    prefix = f"CamRigShot_{cam_obj.name}"
+    prefix = f"CamRigShot_{new_cam_obj.name}"
     item.camera_action = _copy_action(_get_action(cam_obj), f"{prefix}_CAM")
     item.camera_data_action = _copy_action(_get_action(cam_obj.data), f"{prefix}_CAMDATA")
     if root and root.get(TOOL_PROP):

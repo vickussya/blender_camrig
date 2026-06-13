@@ -7,19 +7,18 @@ from .camera_utils import (
     create_turntable,
     analyze_scene_for_shots,
     get_settings,
-    switch_active_camera,
-)
-from .shot_library import delete_shot, load_shot, save_shot
-from .camera_utils import (
+    move_orbit_closer,
+    move_orbit_farther,
     move_orbit_left,
     move_orbit_right,
     raise_camera_orbit,
     lower_camera_orbit,
-    move_orbit_closer,
-    move_orbit_farther,
     start_auto_orbit,
     stop_auto_orbit,
+    switch_active_camera,
 )
+from .dialogue import create_dialogue_setup
+from .shot_library import delete_shot, load_shot, save_shot
 
 
 class CAMRIG_OT_create_rig(bpy.types.Operator):
@@ -276,17 +275,53 @@ class CAMRIG_OT_generate_coverage(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CAMRIG_OT_shot_save(bpy.types.Operator):
-    bl_idname = "camrig.shot_save"
-    bl_label = "Save Shot"
-    bl_description = "Save the active camera to the shot library"
+class CAMRIG_OT_dialogue_create(bpy.types.Operator):
+    bl_idname = "camrig.dialogue_create"
+    bl_label = "Create Dialogue Setup"
+    bl_description = "Create OTS_A, OTS_B, SINGLE_A and SINGLE_B cameras for two selected subjects"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == "OBJECT"
 
     def execute(self, context):
-        err = save_shot(context)
+        err = create_dialogue_setup(context)
         if err:
             self.report({"WARNING"}, err)
             return {"CANCELLED"}
-        self.report({"INFO"}, "Shot saved.")
+        self.report({"INFO"}, "Dialogue setup created (OTS_A, OTS_B, SINGLE_A, SINGLE_B).")
+        return {"FINISHED"}
+
+
+class CAMRIG_OT_shot_save(bpy.types.Operator):
+    bl_idname = "camrig.shot_save"
+    bl_label = "Save Shot"
+    bl_description = "Save the active camera to the shot library with a custom name"
+
+    shot_name: bpy.props.StringProperty(name="Shot Name", default="")
+
+    def invoke(self, context, event):
+        cam_obj = context.scene.camera
+        if cam_obj is None:
+            self.report({"WARNING"}, "No active camera to save.")
+            return {"CANCELLED"}
+        if not self.shot_name:
+            shot_id = cam_obj.get("cam_rig_shot", "SHOT")
+            count = len(context.scene.camrig_settings.shot_library) + 1
+            self.shot_name = f"{shot_id}_{count:02d}"
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "shot_name", text="Name")
+
+    def execute(self, context):
+        name = self.shot_name.strip() or "SHOT"
+        err = save_shot(context, name)
+        if err:
+            self.report({"WARNING"}, err)
+            return {"CANCELLED"}
+        self.report({"INFO"}, f"Shot saved as '{name}'.")
         return {"FINISHED"}
 
 
@@ -308,6 +343,7 @@ class CAMRIG_OT_shot_delete(bpy.types.Operator):
     bl_idname = "camrig.shot_delete"
     bl_label = "Delete Shot"
     bl_description = "Delete the selected shot from the library"
+    bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         err = delete_shot(context)
@@ -323,6 +359,7 @@ CLASSES = (
     CAMRIG_OT_set_active,
     CAMRIG_OT_view_selected_camera,
     CAMRIG_OT_turntable,
+    CAMRIG_OT_dialogue_create,
     CAMRIG_OT_analyze_scene,
     CAMRIG_OT_generate_suggestion,
     CAMRIG_OT_generate_coverage,
