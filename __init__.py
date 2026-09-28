@@ -1,18 +1,15 @@
+from . import camera_utils, dialogue, operators, panels, properties, shot_library
+import bpy
+import importlib
 bl_info = {
-    "name": "Cam Rig Generator (Cinematic Toolkit)",
+    "name": "Cam_rig",
     "author": "vickussya",
-    "version": (2, 0, 0),
+    "version": (2, 0, 1),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar (N) > Cam Rig",
     "description": "Cinematic camera rig with tracking, turntable, and shot library tools.",
     "category": "Camera",
 }
-
-import importlib
-
-import bpy
-
-from . import camera_utils, dialogue, operators, panels, properties, shot_library
 
 
 if "bpy" in locals():
@@ -38,7 +35,8 @@ def register_keymap():
     kc = wm.keyconfigs.addon
     if kc:
         km = kc.keymaps.new(name="3D View", space_type="VIEW_3D")
-        kmi = km.keymap_items.new("camrig.view_selected_camera", type="NUMPAD_0", value="PRESS")
+        kmi = km.keymap_items.new(
+            "camrig.view_selected_camera", type="NUMPAD_1", value="PRESS")
         addon_keymaps.append((km, kmi))
 
 
@@ -52,7 +50,8 @@ def register():
     # Property groups must be registered before attaching to bpy.types.Scene.
     for cls in CLASSES:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.camrig_settings = bpy.props.PointerProperty(type=properties.CAMRIG_Settings)
+    bpy.types.Scene.camrig_settings = bpy.props.PointerProperty(
+        type=properties.CAMRIG_Settings)
     register_keymap()
 
 
