@@ -36,7 +36,7 @@ def register_keymap():
     if kc:
         km = kc.keymaps.new(name="3D View", space_type="VIEW_3D")
         kmi = km.keymap_items.new(
-            "camrig.view_selected_camera", type="NUMPAD_1", value="PRESS")
+            "camrig.view_selected_camera", type="NUMPAD_0", value="PRESS")
         addon_keymaps.append((km, kmi))
 
 
