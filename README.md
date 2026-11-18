@@ -1,3 +1,6 @@
+<img width="800" height="465" alt="camrig_demo-ezgif com-video-to-gif-converter" src="https://github.com/user-attachments/assets/692eba01-d23d-48f1-b876-6d1104c5c590" />
+
+
 # Blender CamRig — Cinematic Camera Toolkit
 
 Create cinematic shots in seconds, switch between shot sizes instantly, and keep cameras aimed correctly.
